@@ -26,6 +26,7 @@ export const SecurityAlertSchema = z.object({
   affectedResource: z.string().min(1, 'affectedResource is required'),
   actorId: z.string().optional(),
   tenantId: z.string().optional(),
+  correlationId: z.string().optional(),
   riskScore: z.number().min(0).max(100, 'riskScore must be between 0 and 100'),
   status: AlertStatusSchema.default('OPEN'),
   assignedTo: z.string().optional(),

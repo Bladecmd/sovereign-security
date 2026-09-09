@@ -169,4 +169,177 @@ export class ForensicsAgent {
       recommendedMitigations: mitigations,
     };
   }
+
+  /**
+   * Traces the complete defensive correlation chain:
+   * SecurityEvent -> Alert -> PolicyDecision -> Containment -> Resolution
+   * using correlationId
+   */
+  public traceCorrelationChain(
+    correlationId: string,
+    allAlerts: SecurityAlert[] = []
+  ): {
+    correlationId: string;
+    securityEvents: SecurityEvent[];
+    alerts: SecurityAlert[];
+    policyDecisions: Array<{
+      action: string;
+      who: string;
+      result: string;
+      timestamp: string;
+      hash?: string;
+      details?: Record<string, unknown>;
+    }>;
+    containment: Array<{
+      action: string;
+      who: string;
+      result: string;
+      timestamp: string;
+      details?: Record<string, unknown>;
+    }>;
+    resolutions: Array<{
+      action: string;
+      who: string;
+      timestamp: string;
+      details?: Record<string, unknown>;
+    }>;
+    chainComplete: boolean;
+  } {
+    // 1. Trace SecurityEvents matching correlationId
+    const matchedEvents = this.securityEvents.filter(
+      (e) => e.correlationId === correlationId
+    );
+    const matchedEventIds = new Set(matchedEvents.map((e) => e.eventId));
+
+    // 2. Trace Alerts matching correlationId or referencing matched event IDs
+    const matchedAlerts = allAlerts.filter(
+      (a) =>
+        a.correlationId === correlationId ||
+        a.sourceEventIds.some((id) => matchedEventIds.has(id))
+    );
+    const matchedAlertIds = new Set(matchedAlerts.map((a) => a.alertId));
+
+    // 3. Trace PolicyDecisions, Containment, and Resolutions from audit records
+    const policyDecisions: Array<{
+      action: string;
+      who: string;
+      result: string;
+      timestamp: string;
+      hash?: string;
+      details?: Record<string, unknown>;
+    }> = [];
+
+    const containment: Array<{
+      action: string;
+      who: string;
+      result: string;
+      timestamp: string;
+      details?: Record<string, unknown>;
+    }> = [];
+
+    const resolutions: Array<{
+      action: string;
+      who: string;
+      timestamp: string;
+      details?: Record<string, unknown>;
+    }> = [];
+
+    if (this.auditService) {
+      const records = this.auditService.getRecords();
+      for (const record of records) {
+        const recordCorr =
+          record.details?.correlationId ||
+          record.details?.auditCorrelationId ||
+          record.details?.traceCorrelationId;
+
+        const isRelated =
+          recordCorr === correlationId ||
+          (record.details?.alertId && matchedAlertIds.has(record.details.alertId as string)) ||
+          (record.details?.targetId &&
+            matchedAlerts.some(
+              (a) =>
+                a.affectedResource === record.details?.targetId ||
+                a.actorId === record.details?.targetId
+            ));
+
+        if (!isRelated) continue;
+
+        if (
+          record.what.startsWith('POLICY_') ||
+          record.what.startsWith('policy.') ||
+          record.what.includes('DECISION') ||
+          record.what.includes('PROVENANCE') ||
+          record.where.includes('policy')
+        ) {
+          policyDecisions.push({
+            action: record.what,
+            who: record.who,
+            result: record.result,
+            timestamp: record.when,
+            hash: record.currentHash,
+            details: record.details,
+          });
+        } else if (
+          record.what.startsWith('containment.quarantine_applied') ||
+          record.what.includes('quarantine')
+        ) {
+          containment.push({
+            action: record.what,
+            who: record.who,
+            result: record.result,
+            timestamp: record.when,
+            details: record.details,
+          });
+        } else if (
+          record.what.startsWith('containment.quarantine_released') ||
+          record.what.includes('release') ||
+          record.what.includes('RESOLV') ||
+          record.what.includes('TRIAGE')
+        ) {
+          resolutions.push({
+            action: record.what,
+            who: record.who,
+            timestamp: record.when,
+            details: record.details,
+          });
+        }
+      }
+    }
+
+    // Also check for alert resolutions
+    for (const alert of matchedAlerts) {
+      if (alert.status === 'RESOLVED' || alert.status === 'CONTAINED') {
+        const existing = resolutions.some(
+          (r) => r.details?.alertId === alert.alertId
+        );
+        if (!existing) {
+          resolutions.push({
+            action: `ALERT_RESOLVED:${alert.status}`,
+            who: alert.assignedTo || 'security-operator',
+            timestamp: alert.resolvedAt || alert.createdAt,
+            details: {
+              alertId: alert.alertId,
+              status: alert.status,
+              resolution: alert.resolution,
+            },
+          });
+        }
+      }
+    }
+
+    const chainComplete =
+      matchedEvents.length > 0 &&
+      (matchedAlerts.length > 0 || policyDecisions.length > 0 || containment.length > 0);
+
+    return {
+      correlationId,
+      securityEvents: matchedEvents,
+      alerts: matchedAlerts,
+      policyDecisions,
+      containment,
+      resolutions,
+      chainComplete,
+    };
+  }
 }
+

@@ -56,7 +56,10 @@ export class ContainmentAgent {
     globalMetrics.incrementCounter('sovereign_containment_quarantines_total');
     globalMetrics.setGauge('sovereign_active_quarantines', this.getActiveQuarantines().length);
 
-    const correlationId = `containment-${quarantineId}`;
+    const correlationId =
+      (request.metadata?.correlationId as string) ||
+      (request.metadata?.traceCorrelationId as string) ||
+      `containment-${quarantineId}`;
     if (this.auditService) {
       this.auditService.append({
         who: initiatedBy,
@@ -97,6 +100,11 @@ export class ContainmentAgent {
     globalMetrics.incrementCounter('sovereign_containment_releases_total');
     globalMetrics.setGauge('sovereign_active_quarantines', this.getActiveQuarantines().length);
 
+    const correlationId =
+      (record.metadata?.correlationId as string) ||
+      (record.metadata?.traceCorrelationId as string) ||
+      `containment-${quarantineId}`;
+
     if (this.auditService) {
       this.auditService.append({
         who: releasedBy,
@@ -108,6 +116,7 @@ export class ContainmentAgent {
           quarantineId,
           releasedAt: record.releasedAt,
           targetId: record.targetId,
+          correlationId,
         },
       });
     }

@@ -79,3 +79,38 @@ export interface PlatformSummary {
   ecosystemHardeningScore: number;
   complianceCertifications: Record<ComplianceFrameworkId, CertificationStatus>;
 }
+
+export type SocEvidenceStatus =
+  | 'IMPLEMENTED'
+  | 'PARTIAL'
+  | 'NOT IMPLEMENTED'
+  | 'EVIDENCE AVAILABLE'
+  | 'EXTERNALLY VALIDATED';
+
+export interface SocComplianceEvidenceItem {
+  controlId: string;
+  framework: ComplianceFrameworkId;
+  frameworkName: string;
+  title: string;
+  description: string;
+  category: string;
+  status: SocEvidenceStatus;
+  evidence: string;
+  evidenceSource: string;
+  lastVerifiedAt: string;
+  isFormalCertification: false; // Explicitly declared: not a formal external certification
+}
+
+export type FleetEntityConnectionStatus = 'CONNECTED' | 'DEGRADED' | 'OFFLINE' | 'UNKNOWN';
+
+export interface SocFleetEntityPosture {
+  entity: EcosystemEntity;
+  displayName: string;
+  status: FleetEntityConnectionStatus;
+  controlCount: number;
+  evidenceCount: number;
+  activeDefenses: string[];
+  lastSyncAt: string;
+  operationalNotes: string;
+}
+

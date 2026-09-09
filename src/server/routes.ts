@@ -92,7 +92,7 @@ export class SovereignSecurityApiHandler {
     const method = req.method?.toUpperCase() || 'GET';
     const correlationId = (req.headers['x-correlation-id'] as string) || `api-${Date.now()}`;
 
-    res.setHeader('X-Security-Version', '2.0.0-phase2a');
+    res.setHeader('X-Security-Version', '2.0.0-phase2c');
     res.setHeader('X-Correlation-Id', correlationId);
 
     try {
@@ -247,6 +247,7 @@ export class SovereignSecurityApiHandler {
         const validEvent = validation.data;
         this.recentEvents.push(validEvent);
         if (this.recentEvents.length > 500) this.recentEvents.shift();
+        this.coordinator.getForensics().registerEvents([validEvent]);
 
         globalMetrics.incrementCounter('sovereign_security_events_ingested_total');
         this.broadcaster.broadcastEvent(validEvent);
@@ -291,9 +292,24 @@ export class SovereignSecurityApiHandler {
       }
 
       if (method === 'GET' && url.pathname === '/api/v1/alerts') {
+        const statusFilter = url.searchParams.get('status');
+        const severityFilter = url.searchParams.get('severity');
+        const correlationFilter = url.searchParams.get('correlationId');
+
+        let list = Array.from(this.alertsStore.values());
+        if (statusFilter) {
+          list = list.filter((a) => a.status === statusFilter);
+        }
+        if (severityFilter) {
+          list = list.filter((a) => a.severity === severityFilter);
+        }
+        if (correlationFilter) {
+          list = list.filter((a) => a.correlationId === correlationFilter);
+        }
+
         return this.sendJson(res, 200, {
-          alerts: Array.from(this.alertsStore.values()),
-          count: this.alertsStore.size,
+          alerts: list,
+          count: list.length,
         });
       }
 
@@ -304,6 +320,8 @@ export class SovereignSecurityApiHandler {
           status: AlertStatus;
           assignedTo?: string;
           resolution?: string;
+          callerId?: string;
+          operatorId?: string;
         };
 
         const existing = this.alertsStore.get(alertId);
@@ -314,6 +332,21 @@ export class SovereignSecurityApiHandler {
           });
         }
 
+        const validStatuses: AlertStatus[] = [
+          'OPEN',
+          'ACKNOWLEDGED',
+          'INVESTIGATING',
+          'CONTAINED',
+          'RESOLVED',
+          'FALSE_POSITIVE',
+        ];
+        if (!validStatuses.includes(body.status)) {
+          return this.sendJson(res, 400, {
+            error: 'INVALID_STATUS',
+            message: `Status must be one of: ${validStatuses.join(', ')}`,
+          });
+        }
+
         existing.status = body.status;
         if (body.assignedTo) existing.assignedTo = body.assignedTo;
         if (body.resolution) existing.resolution = body.resolution;
@@ -321,13 +354,19 @@ export class SovereignSecurityApiHandler {
 
         this.broadcaster.broadcastAlert(existing);
 
+        const actor = body.callerId || body.operatorId || body.assignedTo || 'analyst-triage';
         this.recordAudit({
-          who: body.assignedTo || 'analyst-triage',
+          who: actor,
           what: `TRIAGE_ALERT:${alertId}`,
           where: '/api/v1/alerts/triage',
           why: `Alert status updated to ${body.status}`,
           result: 'SUCCESS',
-          details: { alertId, status: body.status, resolution: body.resolution },
+          details: {
+            alertId,
+            status: body.status,
+            resolution: body.resolution,
+            correlationId: existing.correlationId,
+          },
         });
 
         return this.sendJson(res, 200, { success: true, alert: existing });
@@ -388,6 +427,7 @@ export class SovereignSecurityApiHandler {
         const { event, alerts } = this.mtfAdapter.ingest(body as MTFRawSecurityPayload);
 
         this.recentEvents.push(event);
+        this.coordinator.getForensics().registerEvents([event]);
         this.broadcaster.broadcastEvent(event);
         globalMetrics.incrementCounter('sovereign_security_events_ingested_total');
 
@@ -505,18 +545,133 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 201, result);
       }
 
-      if (method === 'POST' && url.pathname === '/api/v1/agents/containment/release') {
+      if (
+        method === 'POST' &&
+        (url.pathname === '/api/v1/soc/containment/release' ||
+          url.pathname === '/api/v1/agents/containment/release')
+      ) {
         const body = (await this.readJsonBody(req)) as any;
-        if (!body.quarantineId || !body.releasedBy || !body.releaseReason) {
-          return this.sendJson(res, 400, {
-            error: 'MISSING_PARAMETERS',
-            message: 'Fields "quarantineId", "releasedBy", and "releaseReason" are required.',
+        const targetQuarantineId = body.quarantineId;
+        const callerId = body.callerId || body.releasedBy;
+        const role = body.role || 'SECURITY_OPERATOR';
+        const reason = body.reason || body.releaseReason;
+        const confirmed =
+          body.confirmed !== undefined ? body.confirmed : (body.releaseReason ? true : false);
+
+        if (!callerId || typeof callerId !== 'string' || callerId.trim().length === 0) {
+          return this.sendJson(res, 401, {
+            error: 'AUTHENTICATION_REQUIRED',
+            message: 'Authenticated user (callerId) is required to request quarantine release.',
           });
         }
-        const success = this.coordinator
+
+        if (!targetQuarantineId) {
+          return this.sendJson(res, 400, {
+            error: 'MISSING_PARAMETERS',
+            message: 'Field "quarantineId" is required.',
+          });
+        }
+
+        if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+          return this.sendJson(res, 400, {
+            error: 'JUSTIFICATION_REQUIRED',
+            message: 'Non-empty justification reason is required to release containment.',
+          });
+        }
+
+        if (confirmed !== true) {
+          return this.sendJson(res, 400, {
+            error: 'CONFIRMATION_REQUIRED',
+            message: 'Explicit operator confirmation (confirmed: true) is mandatory to release containment.',
+          });
+        }
+
+        const isPrivileged =
+          role === 'SOC_ADMIN' || role === 'SECURITY_LEAD' || role === 'ADMIN';
+
+        const decisionInput: SecurityDecisionInput = {
+          actor: {
+            id: callerId,
+            name: callerId,
+            type: isPrivileged ? 'ADMIN' : 'SERVICE',
+            roles: isPrivileged ? ['ADMIN'] : [],
+            organizationId: 'sovereign-security',
+            attributes: {
+              department: 'SECURITY_OPERATIONS',
+              role,
+              clearanceLevel: isPrivileged ? 3 : 0,
+            },
+          },
+          action: 'containment:release',
+          resource: `quarantine:${targetQuarantineId}`,
+          context: {
+            environment: 'production',
+            ipAddress:
+              (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1',
+            timestamp: new Date().toISOString(),
+          },
+          riskScore: isPrivileged ? 10 : 95,
+          correlationId,
+        };
+
+        const decision = await this.decisionPipeline.evaluate(decisionInput);
+
+        if (decision.decision !== 'ALLOW') {
+          this.recordAudit({
+            who: callerId,
+            what: `soc.containment.release_denied:${targetQuarantineId}`,
+            where: url.pathname,
+            why: `Policy rejected release: ${decision.reasonCode}`,
+            result: 'DENIED',
+            details: {
+              quarantineId: targetQuarantineId,
+              role,
+              reason,
+              decisionId: decision.decisionId,
+              correlationId,
+            },
+          });
+
+          return this.sendJson(res, 403, {
+            error: 'AUTHORIZATION_DENIED',
+            message: `Policy engine rejected containment release for role ${role}: ${decision.reasonCode}`,
+            decision,
+          });
+        }
+
+        const released = this.coordinator
           .getContainment()
-          .release(body.quarantineId, body.releasedBy, body.releaseReason);
-        return this.sendJson(res, 200, { success });
+          .release(targetQuarantineId, callerId, reason);
+
+        if (!released) {
+          return this.sendJson(res, 404, {
+            error: 'QUARANTINE_NOT_FOUND_OR_INACTIVE',
+            message: `Quarantine '${targetQuarantineId}' does not exist or is not currently active.`,
+          });
+        }
+
+        this.recordAudit({
+          who: callerId,
+          what: `soc.containment.release:${targetQuarantineId}`,
+          where: url.pathname,
+          why: reason,
+          result: 'SUCCESS',
+          details: {
+            quarantineId: targetQuarantineId,
+            operatorRole: role,
+            confirmed: true,
+            policyDecisionId: decision.decisionId,
+            correlationId,
+          },
+        });
+
+        return this.sendJson(res, 200, {
+          success: true,
+          quarantineId: targetQuarantineId,
+          releasedBy: callerId,
+          decisionId: decision.decisionId,
+          message: `Quarantine ${targetQuarantineId} successfully released by ${callerId}`,
+        });
       }
 
       if (method === 'GET' && url.pathname === '/api/v1/agents/containment/active') {
@@ -610,6 +765,250 @@ export class SovereignSecurityApiHandler {
           },
         };
         return this.sendJson(res, 200, summary);
+      }
+
+      if (method === 'GET' && url.pathname === '/api/v1/soc/overview') {
+        const auditVerification = this.auditService.verifyIntegrity();
+        const activeQuarantines = this.coordinator.getContainment().getActiveQuarantines();
+        const alertsList = Array.from(this.alertsStore.values());
+        const openAlerts = alertsList.filter(
+          (a) => a.status !== 'RESOLVED' && a.status !== 'FALSE_POSITIVE'
+        );
+        const criticalAlerts = openAlerts.filter((a) => a.severity === 'CRITICAL').length;
+        const highAlerts = openAlerts.filter((a) => a.severity === 'HIGH').length;
+
+        let status = 'OPTIMAL';
+        if (!auditVerification.isValid) {
+          status = 'DEGRADED';
+        } else if (criticalAlerts > 0) {
+          status = 'INCIDENT_ACTIVE';
+        } else if (highAlerts > 0) {
+          status = 'ELEVATED';
+        }
+
+        const fleet = this.posture.getSocFleetPosture();
+        const connectedEntities = fleet.filter((e) => e.status === 'CONNECTED').length;
+
+        return this.sendJson(res, 200, {
+          status,
+          bootTimestamp: this.bootTimestamp,
+          totalEvents: this.recentEvents.length,
+          alerts: {
+            total: alertsList.length,
+            open: openAlerts.length,
+            bySeverity: {
+              CRITICAL: openAlerts.filter((a) => a.severity === 'CRITICAL').length,
+              HIGH: openAlerts.filter((a) => a.severity === 'HIGH').length,
+              MEDIUM: openAlerts.filter((a) => a.severity === 'MEDIUM').length,
+              LOW: openAlerts.filter((a) => a.severity === 'LOW').length,
+              INFO: openAlerts.filter((a) => a.severity === 'INFO').length,
+            },
+            byStatus: {
+              OPEN: alertsList.filter((a) => a.status === 'OPEN').length,
+              INVESTIGATING: alertsList.filter((a) => a.status === 'INVESTIGATING').length,
+              CONTAINED: alertsList.filter((a) => a.status === 'CONTAINED').length,
+              RESOLVED: alertsList.filter((a) => a.status === 'RESOLVED').length,
+              FALSE_POSITIVE: alertsList.filter((a) => a.status === 'FALSE_POSITIVE').length,
+            },
+          },
+          containment: {
+            activeCount: activeQuarantines.length,
+            activeQuarantines,
+          },
+          auditLedger: {
+            totalRecords: auditVerification.totalRecords,
+            integrityValid: auditVerification.isValid,
+            lastHash:
+              this.auditService.getRecords().length > 0
+                ? this.auditService.getRecords()[this.auditService.getRecords().length - 1]!.currentHash
+                : '0'.repeat(64),
+          },
+          fleet: {
+            totalEntities: fleet.length,
+            connectedEntities,
+            entities: fleet,
+          },
+          subsystems: {
+            POLICY_ENGINE: 'ACTIVE',
+            DECISION_PROVENANCE_PIPELINE: 'ACTIVE',
+            RISK_ENGINE: 'ACTIVE',
+            THREAT_ENGINE: 'ACTIVE',
+            IDENTITY_ABAC: 'ACTIVE',
+            KMS_ENVELOPE_ENCRYPTION: 'ACTIVE',
+            SUPPLY_CHAIN_SBOM: 'ACTIVE',
+            AI_SECURITY_GATEWAY: 'ACTIVE',
+            AUTONOMOUS_AGENTS: 'ACTIVE',
+            COMPLIANCE_CERTIFICATION: 'ACTIVE',
+            POSTURE_SYNCHRONIZER: 'ACTIVE',
+            PERSISTENT_AUDIT_LEDGER: this.persistentLedger ? 'MOUNTED' : 'IN_MEMORY',
+          },
+        });
+      }
+
+      if (method === 'GET' && url.pathname === '/api/v1/soc/fleet-posture') {
+        const fleet = this.posture.getSocFleetPosture();
+        return this.sendJson(res, 200, {
+          timestamp: new Date().toISOString(),
+          entities: fleet,
+          summary: {
+            total: fleet.length,
+            connected: fleet.filter((f) => f.status === 'CONNECTED').length,
+            degraded: fleet.filter((f) => f.status === 'DEGRADED').length,
+            offline: fleet.filter((f) => f.status === 'OFFLINE').length,
+            unknown: fleet.filter((f) => f.status === 'UNKNOWN').length,
+          },
+        });
+      }
+
+      if (method === 'GET' && url.pathname === '/api/v1/soc/compliance-evidence') {
+        const matrix = this.compliance.getSocComplianceEvidenceMatrix();
+        return this.sendJson(res, 200, matrix);
+      }
+
+      if (method === 'GET' && url.pathname === '/api/v1/audit/ledger') {
+        const verification = this.auditService.verifyIntegrity();
+        const limit = parseInt(url.searchParams.get('limit') || '100', 10);
+        const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+        const allRecords = this.auditService.getRecords();
+        const paginated = allRecords.slice(offset, offset + limit);
+
+        return this.sendJson(res, 200, {
+          readOnly: true,
+          totalRecords: allRecords.length,
+          limit,
+          offset,
+          verification,
+          records: paginated,
+        });
+      }
+
+      if (method === 'GET' && url.pathname === '/api/v1/soc/system-health') {
+        const auditVerification = this.auditService.verifyIntegrity();
+        const mem = process.memoryUsage();
+        return this.sendJson(res, 200, {
+          status: 'HEALTHY',
+          uptimeSeconds: Math.floor(process.uptime()),
+          bootTimestamp: this.bootTimestamp,
+          currentTimestamp: new Date().toISOString(),
+          memoryUsage: {
+            heapUsedMB: Math.round((mem.heapUsed / 1024 / 1024) * 100) / 100,
+            heapTotalMB: Math.round((mem.heapTotal / 1024 / 1024) * 100) / 100,
+            rssMB: Math.round((mem.rss / 1024 / 1024) * 100) / 100,
+          },
+          components: {
+            POLICY_ENGINE: 'READY',
+            DECISION_PROVENANCE_PIPELINE: 'READY',
+            RISK_ENGINE: 'READY',
+            THREAT_ENGINE: 'READY',
+            IDENTITY_ABAC: 'READY',
+            KMS_ENVELOPE_ENCRYPTION: 'READY',
+            SUPPLY_CHAIN_SBOM: 'READY',
+            AI_SECURITY_GATEWAY: 'READY',
+            AUTONOMOUS_AGENTS: 'READY',
+            COMPLIANCE_CERTIFICATION: 'READY',
+            POSTURE_SYNCHRONIZER: 'READY',
+            PERSISTENT_AUDIT_LEDGER: this.persistentLedger ? 'MOUNTED' : 'IN_MEMORY',
+          },
+          activeQuarantines: this.coordinator.getContainment().getActiveQuarantines().length,
+          auditChainValid: auditVerification.isValid,
+        });
+      }
+
+      if (method === 'POST' && url.pathname === '/api/v1/soc/agents/command') {
+        const body = (await this.readJsonBody(req)) as any;
+        const callerId = body.callerId || (req.headers['x-actor-id'] as string) || 'soc-operator';
+        const role = body.role || 'SECURITY_OPERATOR';
+        const command = body.command;
+
+        if (!command) {
+          return this.sendJson(res, 400, {
+            error: 'MISSING_COMMAND',
+            message: 'Field "command" is required.',
+          });
+        }
+
+        if (role === 'UNPRIVILEGED_GUEST') {
+          return this.sendJson(res, 403, {
+            error: 'AUTHORIZATION_DENIED',
+            message: `Role ${role} is not permitted to execute agent commands.`,
+          });
+        }
+
+        let result: unknown = null;
+        if (command === 'TRIAGE_ALERT') {
+          let alert = body.alert;
+          if (!alert && body.alertId) {
+            alert = this.alertsStore.get(body.alertId);
+          }
+          if (!alert) {
+            return this.sendJson(res, 400, {
+              error: 'ALERT_NOT_FOUND',
+              message: 'Target alert not found.',
+            });
+          }
+          result = this.coordinator.getSentinel().triageAlert(alert);
+        } else if (command === 'FORENSIC_RCA') {
+          let alert = body.alert;
+          if (!alert && body.alertId) {
+            alert = this.alertsStore.get(body.alertId);
+          }
+          if (!alert) {
+            return this.sendJson(res, 400, {
+              error: 'ALERT_NOT_FOUND',
+              message: 'Target alert not found.',
+            });
+          }
+          result = this.coordinator.getForensics().generateRCAReport(alert);
+        } else if (command === 'POSTURE_SYNC') {
+          result = this.posture.syncBaselines();
+        } else if (command === 'CERTIFY') {
+          result = this.compliance.certify(body.framework || 'NIST_SP_800_207');
+        } else {
+          return this.sendJson(res, 400, {
+            error: 'UNKNOWN_COMMAND',
+            message: `Command ${command} not recognized.`,
+          });
+        }
+
+        this.recordAudit({
+          who: callerId,
+          what: `soc.agent.command:${command}`,
+          where: url.pathname,
+          why: body.reason || `Operator executed ${command} command`,
+          result: 'SUCCESS',
+          details: { command, callerId, role, correlationId },
+        });
+
+        return this.sendJson(res, 200, { success: true, command, result });
+      }
+
+      const traceMatch = url.pathname.match(/^\/api\/v1\/forensics\/trace\/([^/]+)$/);
+      if (method === 'GET' && traceMatch) {
+        const targetCorrelationId = decodeURIComponent(traceMatch[1]!);
+        this.coordinator.getForensics().registerEvents(this.recentEvents);
+        const trace = this.coordinator.getForensics().traceCorrelationChain(
+          targetCorrelationId,
+          Array.from(this.alertsStore.values())
+        );
+
+        this.recordAudit({
+          who: (req.headers['x-actor-id'] as string) || 'sec-analyst',
+          what: `FORENSICS_TRACE:${targetCorrelationId}`,
+          where: url.pathname,
+          why: 'Defensive correlation chain investigation',
+          result: 'SUCCESS',
+          details: {
+            correlationId: targetCorrelationId,
+            eventsFound: trace.securityEvents.length,
+            alertsFound: trace.alerts.length,
+            policyDecisionsFound: trace.policyDecisions.length,
+            containmentFound: trace.containment.length,
+            resolutionsFound: trace.resolutions.length,
+            chainComplete: trace.chainComplete,
+          },
+        });
+
+        return this.sendJson(res, 200, trace);
       }
 
       return this.sendJson(res, 404, {
