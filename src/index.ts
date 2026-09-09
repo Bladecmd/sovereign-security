@@ -41,8 +41,12 @@ export * from './risk/engine.js';
 // Audit Foundation
 export * from './audit/audit-service.js';
 
-// Secrets Security
+// Secrets Security (Detection, Scanner, Rotation, KMS, Git Hooks)
 export * from './secrets/detector.js';
+export * from './secrets/scanner.js';
+export * from './secrets/rotation-orchestrator.js';
+export * from './secrets/kms.js';
+export * from './secrets/git-hook.js';
 
 // Observability
 export * from './observability/logger.js';

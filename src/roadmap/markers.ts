@@ -63,14 +63,15 @@ export const SOVEREIGN_SECURITY_ROADMAP: Record<string, RoadmapMilestone> = {
   V0_4: {
     version: 'V0.4',
     name: 'Secrets Detection & Automated Rotation',
-    status: 'PLANNED',
-    targetRelease: 'Future Milestone',
+    status: 'IMPLEMENTED',
+    targetRelease: '2026-Q3 (CURRENT)',
     description:
-      'Deep AST-based secret scanning in code commits, real-time memory dump inspection, automated rotation pipelines with zero downtime, and HSM/KMS orchestration.',
+      'Deep Shannon-entropy secret scanning in code commits, automated dual-key zero-downtime rotation pipelines, git pre-commit hooks, and KMS/HSM envelope encryption orchestration.',
     keyCapabilities: [
-      'Git pre-commit and push hook AST scanning',
-      'Automated key rotation webhooks',
-      'Hardware Security Module (HSM) key lifecycle management',
+      'Shannon entropy analysis & multi-pattern code scanner',
+      'Automated zero-downtime dual-key rotation pipeline',
+      'Hardware Security Module (HSM) & KMS envelope key management',
+      'Git pre-commit security guardrail hook',
     ],
   },
   V0_5: {

@@ -1,5 +1,5 @@
 /**
- * Sovereign Security — Foundation V0.1
+ * Sovereign Security — Foundation V0.1 & Milestone V0.4
  * Secrets Security Interfaces & Contracts
  */
 
@@ -43,4 +43,84 @@ export interface CredentialRotationReminder {
   expiresAt: string;
   daysRemaining: number;
   status: 'CURRENT' | 'DUE_SOON' | 'OVERDUE';
+}
+
+// ==========================================
+// V0.4: Codebase Secret Scanning & Entropy
+// ==========================================
+
+export interface CodeScanFinding {
+  line: number;
+  ruleId: string;
+  classification: SecretClassification;
+  confidence: 'LOW' | 'MEDIUM' | 'HIGH';
+  entropy: number;
+  maskedSnippet: string;
+  remediation: string;
+}
+
+export interface CodeScanReport {
+  scannedAt: string;
+  totalLinesScanned: number;
+  secretsFound: number;
+  findings: CodeScanFinding[];
+  passed: boolean;
+}
+
+// ==========================================
+// V0.4: Automated Zero-Downtime Dual-Key Rotation
+// ==========================================
+
+export type RotationPhase =
+  | 'INITIATED'
+  | 'SECONDARY_DEPLOYED'
+  | 'PRIMARY_PROMOTED'
+  | 'OLD_KEY_DEPRECATED'
+  | 'COMPLETED';
+
+export interface ServiceCredentialDescriptor {
+  credentialId: string;
+  service: string;
+  classification: SecretClassification;
+  version: number;
+  activeKeyHash: string; // SHA-256 fingerprint
+  createdAt: string;
+  expiresAt: string;
+  status: 'ACTIVE' | 'DEPRECATED' | 'REVOKED';
+}
+
+export interface ZeroDowntimeRotationJob {
+  jobId: string;
+  service: string;
+  oldCredentialId: string;
+  newCredentialId: string;
+  currentPhase: RotationPhase;
+  startedAt: string;
+  completedAt?: string;
+  auditTrail: string[];
+}
+
+// ==========================================
+// V0.4: KMS / HSM Envelope Encryption
+// ==========================================
+
+export type KMSKeyState = 'PENDING_GENERATION' | 'ACTIVE' | 'DEPRECATED' | 'DESTROYED';
+
+export interface KMSEnvelope {
+  keyId: string;
+  keyVersion: number;
+  algorithm: 'AES-256-GCM';
+  iv: string; // Hex initialization vector
+  authTag: string; // Hex GCM authentication tag
+  wrappedDataKey: string; // Master-wrapped encrypted DEK
+  ciphertext: string; // Payload encrypted under DEK
+}
+
+export interface KMSMasterKeyDescriptor {
+  keyId: string;
+  alias: string;
+  state: KMSKeyState;
+  algorithm: string;
+  createdAt: string;
+  lastRotatedAt: string;
 }
