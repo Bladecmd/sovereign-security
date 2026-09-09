@@ -20,8 +20,12 @@ export * from './schemas/event.schema.js';
 export * from './schemas/alert.schema.js';
 export * from './schemas/policy.schema.js';
 
-// Identity & Access Management
+// Identity & Access Management (RBAC, ABAC, JIT, WebAuthn, Tenant)
 export * from './identity/rbac.js';
+export * from './identity/abac.js';
+export * from './identity/jit.js';
+export * from './identity/webauthn.js';
+export * from './identity/tenant.js';
 
 // Policy Engine
 export * from './policy/engine.js';

@@ -49,15 +49,15 @@ export const SOVEREIGN_SECURITY_ROADMAP: Record<string, RoadmapMilestone> = {
   V0_3: {
     version: 'V0.3',
     name: 'Advanced Identity/RBAC',
-    status: 'PLANNED',
-    targetRelease: 'Future Milestone',
+    status: 'IMPLEMENTED',
+    targetRelease: '2026-Q3 (CURRENT)',
     description:
-      'Dynamic attribute-based access control (ABAC), hardware security key (WebAuthn/FIDO2) enforcement, decentralized identity verification, and multi-tenant organization scoping.',
+      'Dynamic attribute-based access control (ABAC), hardware security key (WebAuthn/FIDO2) enforcement, multi-tenant organization scoping, and Just-In-Time (JIT) privilege elevation.',
     keyCapabilities: [
-      'Attribute-Based Access Control (ABAC) engine',
-      'Cryptographic hardware token authentication',
-      'Tenant partition governance',
-      'Ephemeral just-in-time privilege escalation',
+      'Attribute-Based Access Control (ABAC) dynamic condition engine',
+      'Cryptographic hardware token (FIDO2/WebAuthn) step-up authentication',
+      'Multi-tenant partition boundary governance & federation agreements',
+      'Ephemeral Just-In-Time (JIT) privilege escalation with auto-expiring TTLs',
     ],
   },
   V0_4: {
