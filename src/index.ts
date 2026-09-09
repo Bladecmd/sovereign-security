@@ -74,6 +74,14 @@ export * from './ai/model-armor.js';
 export * from './ai/agent-sandbox.js';
 export * from './ai/grounding.js';
 
+// Autonomous Security Agents (Milestone V0.7)
+export * from './types/agents.js';
+export * from './agents/sentinel.js';
+export * from './agents/containment.js';
+export * from './agents/forensics.js';
+export * from './agents/coordinator.js';
+
 // Roadmap Markers
 export * from './roadmap/markers.js';
+
 

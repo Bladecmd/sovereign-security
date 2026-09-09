@@ -106,14 +106,16 @@ export const SOVEREIGN_SECURITY_ROADMAP: Record<string, RoadmapMilestone> = {
   V0_7: {
     version: 'V0.7',
     name: 'Autonomous Security Agents',
-    status: 'PLANNED',
-    targetRelease: 'Future Milestone',
+    status: 'IMPLEMENTED',
+    targetRelease: '2026-Q3 (CURRENT)',
     description:
-      'Specialized defensive AI security agents performing continuous threat analysis, triage recommendation, automated quarantine, and incident response drafting.',
+      'Coordinated defensive autonomous AI security agents performing continuous 24/7 alert triage, noise/false-positive suppression, multi-alert correlation, automated reversible containment/quarantines, and forensics RCA report reconstruction.',
     keyCapabilities: [
-      'Sentinel Agent: 24/7 automated alert triaging',
-      'Containment Agent: Automated network & credential isolation upon critical compromise',
-      'Forensics Agent: Incident timeline reconstruction',
+      'Sentinel Agent: 24/7 automated alert triage & false-positive suppression',
+      'Containment Agent: Automated defensive quarantine, session revocation, and rollback',
+      'Forensics Agent: Incident timeline reconstruction & Root Cause Analysis (RCA) synthesis',
+      'Agent Coordinator: End-to-end incident response orchestration',
+      'Autonomous Agents HTTP REST endpoints',
     ],
   },
   V1_0: {

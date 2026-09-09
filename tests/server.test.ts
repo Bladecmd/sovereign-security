@@ -179,5 +179,53 @@ describe('Local HTTP Security API Server & Webhooks', () => {
     assert.equal(data.clean, false);
     assert.ok(data.sanitizedText.includes('[CREDENTIAL_REDACTED]'));
   });
+
+  test('POST /api/v1/agents/sentinel/triage performs automated alert triage over HTTP', async () => {
+    const res = await fetch(`${baseUrl}/api/v1/agents/sentinel/triage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        alert: {
+          alertId: 'http-alt-1',
+          title: 'CRITICAL: Database Master Key Leak',
+          severity: 'CRITICAL',
+          status: 'OPEN',
+          actorId: 'service-worker-leak',
+          tenantId: 'sovereign-hq',
+          sourceEventIds: ['evt-101'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      }),
+    });
+    assert.equal(res.status, 200);
+    const triage = (await res.json()) as { decision: string; recommendedSeverity: string };
+    assert.equal(triage.decision, 'CONTAIN');
+    assert.equal(triage.recommendedSeverity, 'CRITICAL');
+  });
+
+  test('POST /api/v1/agents/containment/quarantine creates active quarantine over HTTP', async () => {
+    const res = await fetch(`${baseUrl}/api/v1/agents/containment/quarantine`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetType: 'ACTOR',
+        targetId: 'http-rogue-actor',
+        reason: 'Detected credential leak over HTTP API',
+      }),
+    });
+    assert.equal(res.status, 201);
+    const data = (await res.json()) as { success: boolean; quarantineRecord: { targetId: string } };
+    assert.equal(data.success, true);
+    assert.equal(data.quarantineRecord.targetId, 'http-rogue-actor');
+
+    // Verify in active quarantines endpoint
+    const listRes = await fetch(`${baseUrl}/api/v1/agents/containment/active`);
+    assert.equal(listRes.status, 200);
+    const listData = (await listRes.json()) as { count: number; quarantines: Array<{ targetId: string }> };
+    assert.ok(listData.count > 0);
+    assert.ok(listData.quarantines.some((q) => q.targetId === 'http-rogue-actor'));
+  });
 });
+
 

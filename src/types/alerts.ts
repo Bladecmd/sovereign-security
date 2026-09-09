@@ -22,6 +22,8 @@ export interface SecurityAlert {
   description: string;
   sourceEventIds: string[];
   affectedResource: string;
+  actorId?: string;
+  tenantId?: string;
   riskScore: number; // 0 - 100
   status: AlertStatus;
   assignedTo?: string; // Analyst ID or Automated Response Handler

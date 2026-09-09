@@ -24,6 +24,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentToolPermissionRegistry } from '../ai/tool-permissions.js';
 import { AISecurityGateway } from '../ai/gateway.js';
+import { AgentCoordinator } from '../agents/coordinator.js';
 import { AuditService } from '../audit/audit-service.js';
 import { MetroTaskForceAdapter, MTFRawSecurityPayload } from '../integrations/mtf/adapter.js';
 import { StructuredLogger } from '../observability/logger.js';
@@ -43,6 +44,7 @@ export class SovereignSecurityApiHandler {
   private auditService: AuditService;
   private threatEngine: ThreatEngine;
   private aiGateway: AISecurityGateway;
+  private coordinator: AgentCoordinator;
   private mtfAdapter: MetroTaskForceAdapter;
   private alertsStore: Map<string, SecurityAlert> = new Map();
   private recentEvents: SecurityEvent[] = [];
@@ -56,6 +58,7 @@ export class SovereignSecurityApiHandler {
     auditService?: AuditService;
     threatEngine?: ThreatEngine;
     aiGateway?: AISecurityGateway;
+    coordinator?: AgentCoordinator;
     broadcaster?: TelemetryBroadcaster;
     logger?: StructuredLogger;
   }) {
@@ -65,6 +68,8 @@ export class SovereignSecurityApiHandler {
     this.threatEngine = options?.threatEngine || new ThreatEngine();
     this.aiGateway =
       options?.aiGateway || new AISecurityGateway({ auditService: this.auditService });
+    this.coordinator =
+      options?.coordinator || new AgentCoordinator({ auditService: this.auditService });
     this.broadcaster = options?.broadcaster || new TelemetryBroadcaster();
     this.mtfAdapter = new MetroTaskForceAdapter(this.threatEngine);
     this.logger =
@@ -412,6 +417,87 @@ export class SovereignSecurityApiHandler {
         }
         const result = this.aiGateway.verifyGrounding(body);
         return this.sendJson(res, 200, result);
+      }
+
+      // 18. Autonomous Agent: Sentinel Triage
+      if (method === 'POST' && url.pathname === '/api/v1/agents/sentinel/triage') {
+        const body = (await this.readJsonBody(req)) as { alert?: SecurityAlert; alertId?: string };
+        let targetAlert = body.alert;
+        if (!targetAlert && body.alertId) {
+          targetAlert = this.alertsStore.get(body.alertId);
+        }
+        if (!targetAlert) {
+          return this.sendJson(res, 400, {
+            error: 'MISSING_ALERT',
+            message: 'Provide a valid "alert" object or an existing "alertId".',
+          });
+        }
+        const triageResult = this.coordinator.getSentinel().triageAlert(targetAlert);
+        return this.sendJson(res, 200, triageResult);
+      }
+
+      // 19. Autonomous Agent: Containment Quarantine
+      if (method === 'POST' && url.pathname === '/api/v1/agents/containment/quarantine') {
+        const body = (await this.readJsonBody(req)) as any;
+        if (!body.targetType || !body.targetId || !body.reason) {
+          return this.sendJson(res, 400, {
+            error: 'MISSING_PARAMETERS',
+            message: 'Fields "targetType", "targetId", and "reason" are required.',
+          });
+        }
+        const result = this.coordinator.getContainment().quarantine(body);
+        return this.sendJson(res, 201, result);
+      }
+
+      // 20. Autonomous Agent: Containment Release
+      if (method === 'POST' && url.pathname === '/api/v1/agents/containment/release') {
+        const body = (await this.readJsonBody(req)) as any;
+        if (!body.quarantineId || !body.releasedBy || !body.releaseReason) {
+          return this.sendJson(res, 400, {
+            error: 'MISSING_PARAMETERS',
+            message: 'Fields "quarantineId", "releasedBy", and "releaseReason" are required.',
+          });
+        }
+        const success = this.coordinator
+          .getContainment()
+          .release(body.quarantineId, body.releasedBy, body.releaseReason);
+        return this.sendJson(res, 200, { success });
+      }
+
+      // 21. Autonomous Agent: Active Quarantines List
+      if (method === 'GET' && url.pathname === '/api/v1/agents/containment/active') {
+        const active = this.coordinator.getContainment().getActiveQuarantines();
+        return this.sendJson(res, 200, { count: active.length, quarantines: active });
+      }
+
+      // 22. Autonomous Agent: Forensics RCA
+      if (method === 'POST' && url.pathname === '/api/v1/agents/forensics/rca') {
+        const body = (await this.readJsonBody(req)) as { alert?: SecurityAlert; alertId?: string };
+        let targetAlert = body.alert;
+        if (!targetAlert && body.alertId) {
+          targetAlert = this.alertsStore.get(body.alertId);
+        }
+        if (!targetAlert) {
+          return this.sendJson(res, 400, {
+            error: 'MISSING_ALERT',
+            message: 'Provide a valid "alert" object or an existing "alertId".',
+          });
+        }
+        const rca = this.coordinator.getForensics().generateRCAReport(targetAlert);
+        return this.sendJson(res, 200, rca);
+      }
+
+      // 23. Autonomous Agent: Coordinator End-to-End Process
+      if (method === 'POST' && url.pathname === '/api/v1/agents/coordinator/process') {
+        const body = (await this.readJsonBody(req)) as any;
+        if (!body.alert) {
+          return this.sendJson(res, 400, {
+            error: 'MISSING_PARAMETERS',
+            message: 'Field "alert" is required.',
+          });
+        }
+        const workflow = await this.coordinator.processAlert(body);
+        return this.sendJson(res, 200, workflow);
       }
 
       // 404 Route Not Found
