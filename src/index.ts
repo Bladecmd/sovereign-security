@@ -81,7 +81,15 @@ export * from './agents/containment.js';
 export * from './agents/forensics.js';
 export * from './agents/coordinator.js';
 
+// Integrated Sovereign Security Operations Platform (Milestone V1.0)
+export * from './types/compliance.js';
+export * from './compliance/frameworks.js';
+export * from './compliance/certification.js';
+export * from './posture/synchronizer.js';
+export * from './platform/platform.js';
+
 // Roadmap Markers
 export * from './roadmap/markers.js';
+
 
 

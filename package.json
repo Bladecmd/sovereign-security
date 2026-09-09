@@ -1,7 +1,7 @@
 {
   "name": "sovereign-security",
-  "version": "0.1.0",
-  "description": "Sovereign Security Foundation V0.1 — Independent Identity, Security, Risk, and Governance Layer",
+  "version": "1.0.0",
+  "description": "Sovereign Security Platform V1.0 — Integrated Zero-Trust Identity, Security, Risk, and Governance Layer",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",

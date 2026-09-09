@@ -226,6 +226,31 @@ describe('Local HTTP Security API Server & Webhooks', () => {
     assert.ok(listData.count > 0);
     assert.ok(listData.quarantines.some((q) => q.targetId === 'http-rogue-actor'));
   });
+
+  test('GET /api/v1/compliance/certify evaluates compliance certification over HTTP', async () => {
+    const res = await fetch(`${baseUrl}/api/v1/compliance/certify?framework=NIST_SP_800_207`);
+    assert.equal(res.status, 200);
+    const report = (await res.json()) as { framework: string; certificationStatus: string; overallScore: number };
+    assert.equal(report.framework, 'NIST_SP_800_207');
+    assert.equal(report.certificationStatus, 'CERTIFIED');
+    assert.equal(report.overallScore, 100);
+  });
+
+  test('GET /api/v1/platform/posture and GET /api/v1/platform/summary return operational metrics', async () => {
+    const postureRes = await fetch(`${baseUrl}/api/v1/platform/posture`);
+    assert.equal(postureRes.status, 200);
+    const posture = (await postureRes.json()) as { overallHardeningScore: number; entities: Record<string, unknown> };
+    assert.ok(posture.overallHardeningScore >= 90);
+    assert.ok(posture.entities.SOVEREIGN_OS);
+
+    const summaryRes = await fetch(`${baseUrl}/api/v1/platform/summary`);
+    assert.equal(summaryRes.status, 200);
+    const summary = (await summaryRes.json()) as { version: string; status: string; releaseTag: string };
+    assert.equal(summary.version, '1.0.0');
+    assert.equal(summary.releaseTag, 'v1.0.0');
+    assert.equal(summary.status, 'OPTIMAL');
+  });
 });
+
 
 
