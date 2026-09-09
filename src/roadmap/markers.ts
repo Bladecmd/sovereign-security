@@ -77,14 +77,15 @@ export const SOVEREIGN_SECURITY_ROADMAP: Record<string, RoadmapMilestone> = {
   V0_5: {
     version: 'V0.5',
     name: 'Dependency & Vulnerability Intelligence',
-    status: 'PLANNED',
-    targetRelease: 'Future Milestone',
+    status: 'IMPLEMENTED',
+    targetRelease: '2026-Q3 (CURRENT)',
     description:
-      'Continuous Software Bill of Materials (SBOM) generation, known CVE tracking, license compliance scanning, and supply chain provenance verification.',
+      'Continuous CycloneDX/SPDX SBOM generation, automated known CVE vulnerability matching with CVSS scoring, SLSA Level 3 build provenance verification, and software license compliance governance.',
     keyCapabilities: [
-      'CycloneDX / SPDX SBOM generation',
-      'Automated CVE vulnerability alerts',
-      'Supply chain provenance verification (SLSA Level 3)',
+      'CycloneDX v1.5 / SPDX SBOM generation and validation',
+      'Automated CVE advisory correlation & SecurityAlert generation',
+      'SLSA Level 3 build provenance attestation verification',
+      'Software license compliance & copyleft risk analyzer',
     ],
   },
   V0_6: {

@@ -59,5 +59,12 @@ export * from './integrations/mtf/adapter.js';
 export * from './server/routes.js';
 export * from './server/server.js';
 
+// Software Supply Chain & Vulnerability Intelligence
+export * from './types/supply-chain.js';
+export * from './supply-chain/sbom.js';
+export * from './supply-chain/cve-scanner.js';
+export * from './supply-chain/slsa.js';
+export * from './supply-chain/license.js';
+
 // Roadmap Markers
 export * from './roadmap/markers.js';
