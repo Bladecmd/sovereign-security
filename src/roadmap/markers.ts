@@ -91,14 +91,16 @@ export const SOVEREIGN_SECURITY_ROADMAP: Record<string, RoadmapMilestone> = {
   V0_6: {
     version: 'V0.6',
     name: 'AI Security Gateway',
-    status: 'PLANNED',
-    targetRelease: 'Future Milestone',
+    status: 'IMPLEMENTED',
+    targetRelease: '2026-Q3 (CURRENT)',
     description:
-      'Deep semantic boundary enforcement, real-time prompt-injection defense with specialized neural classifiers, dynamic tool rate limiting, and agent hallucination guardrails.',
+      'Deep semantic boundary enforcement, real-time prompt-injection defense with multi-layer heuristics, canary token leak interceptors, Model Armor output sanitizers, autonomous agent sandbox quotas, and hallucination grounding guardrails.',
     keyCapabilities: [
-      'Neural prompt injection classifier',
-      'Real-time semantic exfiltration filter',
-      'Autonomous agent sandbox runtime',
+      'Multi-layer prompt injection & jailbreak defense engine',
+      'Model Armor output sanitizer with canary token exfiltration interceptor',
+      'Autonomous agent sandbox runtime with tool execution quotas and loop prevention',
+      'Semantic grounding and hallucination verification guard',
+      'AI Security Gateway HTTP REST endpoints',
     ],
   },
   V0_7: {

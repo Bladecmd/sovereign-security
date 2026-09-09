@@ -23,6 +23,7 @@ import { IncomingMessage, ServerResponse } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentToolPermissionRegistry } from '../ai/tool-permissions.js';
+import { AISecurityGateway } from '../ai/gateway.js';
 import { AuditService } from '../audit/audit-service.js';
 import { MetroTaskForceAdapter, MTFRawSecurityPayload } from '../integrations/mtf/adapter.js';
 import { StructuredLogger } from '../observability/logger.js';
@@ -41,6 +42,7 @@ export class SovereignSecurityApiHandler {
   private toolRegistry: AgentToolPermissionRegistry;
   private auditService: AuditService;
   private threatEngine: ThreatEngine;
+  private aiGateway: AISecurityGateway;
   private mtfAdapter: MetroTaskForceAdapter;
   private alertsStore: Map<string, SecurityAlert> = new Map();
   private recentEvents: SecurityEvent[] = [];
@@ -53,6 +55,7 @@ export class SovereignSecurityApiHandler {
     toolRegistry?: AgentToolPermissionRegistry;
     auditService?: AuditService;
     threatEngine?: ThreatEngine;
+    aiGateway?: AISecurityGateway;
     broadcaster?: TelemetryBroadcaster;
     logger?: StructuredLogger;
   }) {
@@ -60,6 +63,8 @@ export class SovereignSecurityApiHandler {
     this.toolRegistry = options?.toolRegistry || new AgentToolPermissionRegistry();
     this.auditService = options?.auditService || new AuditService();
     this.threatEngine = options?.threatEngine || new ThreatEngine();
+    this.aiGateway =
+      options?.aiGateway || new AISecurityGateway({ auditService: this.auditService });
     this.broadcaster = options?.broadcaster || new TelemetryBroadcaster();
     this.mtfAdapter = new MetroTaskForceAdapter(this.threatEngine);
     this.logger =
@@ -330,6 +335,83 @@ export class SovereignSecurityApiHandler {
           normalizedEvent: event,
           triggeredAlerts: alerts,
         });
+      }
+
+      // 14. AI Gateway: Inspect Input (Prompt Injection Defense)
+      if (method === 'POST' && url.pathname === '/api/v1/ai/gateway/inspect-input') {
+        const body = (await this.readJsonBody(req)) as {
+          prompt: string;
+          agentId?: string;
+          context?: Record<string, unknown>;
+        };
+        if (!body.prompt) {
+          return this.sendJson(res, 400, {
+            error: 'MISSING_PARAMETERS',
+            message: 'Field "prompt" is required.',
+          });
+        }
+        const result = this.aiGateway.inspectInput(body);
+        return this.sendJson(res, 200, result);
+      }
+
+      // 15. AI Gateway: Inspect Output (Model Armor Sanitizer)
+      if (method === 'POST' && url.pathname === '/api/v1/ai/gateway/inspect-output') {
+        const body = (await this.readJsonBody(req)) as {
+          output: string;
+          agentId?: string;
+          correlationId?: string;
+        };
+        if (typeof body.output !== 'string') {
+          return this.sendJson(res, 400, {
+            error: 'MISSING_PARAMETERS',
+            message: 'Field "output" is required.',
+          });
+        }
+        const result = this.aiGateway.inspectOutput(body.output, {
+          agentId: body.agentId,
+          correlationId: body.correlationId,
+        });
+        return this.sendJson(res, 200, result);
+      }
+
+      // 16. AI Gateway: Tool Execution Sandbox Check
+      if (method === 'POST' && url.pathname === '/api/v1/ai/gateway/tool-execute') {
+        const body = (await this.readJsonBody(req)) as {
+          agentId: string;
+          toolName: string;
+          arguments: Record<string, unknown>;
+          sessionId?: string;
+        };
+        if (!body.agentId || !body.toolName) {
+          return this.sendJson(res, 400, {
+            error: 'MISSING_PARAMETERS',
+            message: 'Fields "agentId" and "toolName" are required.',
+          });
+        }
+        const result = this.aiGateway.evaluateToolCall({
+          agentId: body.agentId,
+          toolName: body.toolName,
+          arguments: body.arguments || {},
+          sessionId: body.sessionId,
+        });
+        return this.sendJson(res, 200, result);
+      }
+
+      // 17. AI Gateway: Factual Grounding & Hallucination Check
+      if (method === 'POST' && url.pathname === '/api/v1/ai/gateway/grounding-check') {
+        const body = (await this.readJsonBody(req)) as {
+          claim: string;
+          sourceContexts: string[];
+          minimumGroundingScore?: number;
+        };
+        if (!body.claim || !Array.isArray(body.sourceContexts)) {
+          return this.sendJson(res, 400, {
+            error: 'MISSING_PARAMETERS',
+            message: 'Fields "claim" (string) and "sourceContexts" (array of strings) are required.',
+          });
+        }
+        const result = this.aiGateway.verifyGrounding(body);
+        return this.sendJson(res, 200, result);
       }
 
       // 404 Route Not Found

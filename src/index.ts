@@ -66,5 +66,14 @@ export * from './supply-chain/cve-scanner.js';
 export * from './supply-chain/slsa.js';
 export * from './supply-chain/license.js';
 
+// AI Security Gateway (Milestone V0.6)
+export * from './types/ai-gateway.js';
+export * from './ai/gateway.js';
+export * from './ai/prompt-injection.js';
+export * from './ai/model-armor.js';
+export * from './ai/agent-sandbox.js';
+export * from './ai/grounding.js';
+
 // Roadmap Markers
 export * from './roadmap/markers.js';
+
