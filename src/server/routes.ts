@@ -1,21 +1,6 @@
 /**
- * Sovereign Security — Foundation V0.2
- * Local HTTP API Server & Webhook Ingestion Routes with Real-Time Dashboard & SSE
- *
- * Exposes RESTful endpoints for live webhook emissions, policy evaluations, and dashboard:
- * - GET  / & /dashboard
- * - GET  /api/v1/events/stream (SSE)
- * - GET  /api/v1/telemetry/stats
- * - POST /api/v1/events
- * - POST /api/v1/policy/evaluate
- * - POST /api/v1/alerts
- * - GET  /api/v1/alerts
- * - POST /api/v1/alerts/:id/triage
- * - POST /api/v1/ai/tool-check
- * - POST /api/v1/audit
- * - GET  /api/v1/audit/verify
- * - POST /api/v1/ingest/mtf
- * - GET  /health
+ * Sovereign Security — Milestone Phase 2A
+ * Production Hardened REST API & Zero-Trust Telemetry Endpoints
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -28,22 +13,28 @@ import { AgentCoordinator } from '../agents/coordinator.js';
 import { ComplianceCertificationEngine } from '../compliance/certification.js';
 import { PostureSynchronizer } from '../posture/synchronizer.js';
 import { AuditService } from '../audit/audit-service.js';
+import { PersistentAuditLedger } from '../audit/persistent-storage.js';
 import { MetroTaskForceAdapter, MTFRawSecurityPayload } from '../integrations/mtf/adapter.js';
 import { StructuredLogger } from '../observability/logger.js';
+import { globalMetrics } from '../observability/metrics.js';
 import { PolicyEngine } from '../policy/engine.js';
+import { SecurityDecisionPipeline } from '../policy/provenance.js';
 import { RiskEngine } from '../risk/engine.js';
 import { ThreatEngine } from '../threat/engine.js';
 import { AlertStatus, SecurityAlert } from '../types/alerts.js';
 import { CreateSecurityEventInput, SecurityEvent } from '../types/events.js';
 import { PolicyEvaluationInput } from '../types/policy.js';
+import { SecurityDecisionInput } from '../types/provenance.js';
 import { safeValidateSecurityAlert, validateSecurityAlert } from '../schemas/alert.schema.js';
 import { safeValidateSecurityEvent } from '../schemas/event.schema.js';
 import { TelemetryBroadcaster } from './sse.js';
 
 export class SovereignSecurityApiHandler {
   private policyEngine: PolicyEngine;
+  private decisionPipeline: SecurityDecisionPipeline;
   private toolRegistry: AgentToolPermissionRegistry;
   private auditService: AuditService;
+  private persistentLedger?: PersistentAuditLedger;
   private threatEngine: ThreatEngine;
   private aiGateway: AISecurityGateway;
   private coordinator: AgentCoordinator;
@@ -55,11 +46,13 @@ export class SovereignSecurityApiHandler {
   private broadcaster: TelemetryBroadcaster;
   private logger: StructuredLogger;
   private dashboardHtmlCache: string | null = null;
+  private bootTimestamp: string = new Date().toISOString();
 
   constructor(options?: {
     policyEngine?: PolicyEngine;
     toolRegistry?: AgentToolPermissionRegistry;
     auditService?: AuditService;
+    persistentLedger?: PersistentAuditLedger;
     threatEngine?: ThreatEngine;
     aiGateway?: AISecurityGateway;
     coordinator?: AgentCoordinator;
@@ -68,9 +61,17 @@ export class SovereignSecurityApiHandler {
     broadcaster?: TelemetryBroadcaster;
     logger?: StructuredLogger;
   }) {
+    this.persistentLedger = options?.persistentLedger;
+    this.auditService =
+      options?.auditService ||
+      (this.persistentLedger ? this.persistentLedger.getAuditService() : new AuditService());
     this.policyEngine = options?.policyEngine || new PolicyEngine();
+    this.decisionPipeline = new SecurityDecisionPipeline({
+      policyEngine: this.policyEngine,
+      auditService: this.auditService,
+      logger: options?.logger,
+    });
     this.toolRegistry = options?.toolRegistry || new AgentToolPermissionRegistry();
-    this.auditService = options?.auditService || new AuditService();
     this.threatEngine = options?.threatEngine || new ThreatEngine();
     this.aiGateway =
       options?.aiGateway || new AISecurityGateway({ auditService: this.auditService });
@@ -91,11 +92,10 @@ export class SovereignSecurityApiHandler {
     const method = req.method?.toUpperCase() || 'GET';
     const correlationId = (req.headers['x-correlation-id'] as string) || `api-${Date.now()}`;
 
-    res.setHeader('X-Security-Version', '0.2.0');
+    res.setHeader('X-Security-Version', '2.0.0-phase2a');
     res.setHeader('X-Correlation-Id', correlationId);
 
     try {
-      // 1. Dashboard UI
       if (method === 'GET' && (url.pathname === '/' || url.pathname === '/dashboard')) {
         const html = this.getDashboardHtml();
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -104,27 +104,85 @@ export class SovereignSecurityApiHandler {
         return;
       }
 
-      // 2. Server-Sent Events (SSE) Live Stream
       if (method === 'GET' && url.pathname === '/api/v1/events/stream') {
         this.broadcaster.addClient(res);
         return;
       }
 
-      // JSON endpoints default header
+      if (method === 'GET' && url.pathname === '/metrics') {
+        res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+        res.statusCode = 200;
+        res.end(globalMetrics.toPrometheusString());
+        return;
+      }
+
       res.setHeader('Content-Type', 'application/json');
 
-      // 3. Health Check
       if (method === 'GET' && url.pathname === '/health') {
+        const memory = process.memoryUsage();
         return this.sendJson(res, 200, {
           status: 'UP',
           service: 'sovereign-security',
           version: '0.2.0',
+          phase: '2A',
+          phaseVersion: '2.0.0-phase2a',
+          uptimeSeconds: Math.floor(process.uptime()),
+          memory: {
+            heapUsedMB: Math.round(memory.heapUsed / 1024 / 1024),
+            heapTotalMB: Math.round(memory.heapTotal / 1024 / 1024),
+            rssMB: Math.round(memory.rss / 1024 / 1024),
+          },
           subscribers: this.broadcaster.getSubscriberCount(),
           timestamp: new Date().toISOString(),
         });
       }
 
-      // 4. Telemetry Stats & Ecosystem Risk Summary
+      if (method === 'GET' && url.pathname === '/ready') {
+        const auditVerification = this.auditService.verifyIntegrity();
+        const isReady = auditVerification.isValid;
+
+        const responsePayload = {
+          ready: isReady,
+          service: 'sovereign-security',
+          version: '2.0.0-phase2a',
+          checks: {
+            policyEngine: 'READY',
+            auditLedger: auditVerification.isValid ? 'VERIFIED' : 'INTEGRITY_COMPROMISED',
+            persistentStorage: this.persistentLedger ? 'MOUNTED' : 'MEMORY_ONLY',
+            quarantineEngine: 'READY',
+            threatEngine: 'READY',
+          },
+          auditTotalRecords: auditVerification.totalRecords,
+          bootTimestamp: this.bootTimestamp,
+          timestamp: new Date().toISOString(),
+        };
+
+        return this.sendJson(res, isReady ? 200 : 503, responsePayload);
+      }
+
+      if (method === 'POST' && url.pathname === '/api/v1/decisions/evaluate') {
+        const body = (await this.readJsonBody(req)) as SecurityDecisionInput;
+        const provenance = this.decisionPipeline.evaluate(body);
+
+        if (this.persistentLedger) {
+          this.persistentLedger.append({
+            who: provenance.actor.id,
+            what: `DECISION:${provenance.decision}:${provenance.action}`,
+            where: provenance.resource,
+            why: provenance.reasonCode,
+            result: provenance.decision === 'ALLOW' ? 'SUCCESS' : 'DENIED',
+            details: {
+              decisionId: provenance.decisionId,
+              correlationId: provenance.correlationId,
+              rule: provenance.policyEvaluation.ruleEvaluated,
+              signature: provenance.cryptographicSignature,
+            },
+          });
+        }
+
+        return this.sendJson(res, 200, provenance);
+      }
+
       if (method === 'GET' && url.pathname === '/api/v1/telemetry/stats') {
         const alertsList = Array.from(this.alertsStore.values());
         const openAlerts = alertsList.filter(
@@ -152,7 +210,6 @@ export class SovereignSecurityApiHandler {
         });
       }
 
-      // 5. Ingest Normalized SecurityEvent
       if (method === 'POST' && url.pathname === '/api/v1/events') {
         const body = await this.readJsonBody(req);
         const input = body as CreateSecurityEventInput;
@@ -191,17 +248,17 @@ export class SovereignSecurityApiHandler {
         this.recentEvents.push(validEvent);
         if (this.recentEvents.length > 500) this.recentEvents.shift();
 
-        // Broadcast to dashboard
+        globalMetrics.incrementCounter('sovereign_security_events_ingested_total');
         this.broadcaster.broadcastEvent(validEvent);
 
         const alerts = this.threatEngine.processEvent(validEvent);
         for (const alert of alerts) {
           this.alertsStore.set(alert.alertId, alert);
           this.broadcaster.broadcastAlert(alert);
+          globalMetrics.incrementCounter('sovereign_security_alerts_generated_total');
         }
 
-        // Record in audit log
-        this.auditService.append({
+        this.recordAudit({
           who: validEvent.actorId,
           what: `INGEST_EVENT:${validEvent.eventType}`,
           where: url.pathname,
@@ -217,12 +274,11 @@ export class SovereignSecurityApiHandler {
         });
       }
 
-      // 6. Evaluate Policy
       if (method === 'POST' && url.pathname === '/api/v1/policy/evaluate') {
         const body = await this.readJsonBody(req);
         const decision = this.policyEngine.evaluate(body as PolicyEvaluationInput);
 
-        this.auditService.append({
+        this.recordAudit({
           who: (body as PolicyEvaluationInput).actor?.id || 'unknown-actor',
           what: `POLICY_EVALUATION:${(body as PolicyEvaluationInput).action}`,
           where: (body as PolicyEvaluationInput).resource || 'unknown-resource',
@@ -234,7 +290,6 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 200, decision);
       }
 
-      // 7. List Active Alerts
       if (method === 'GET' && url.pathname === '/api/v1/alerts') {
         return this.sendJson(res, 200, {
           alerts: Array.from(this.alertsStore.values()),
@@ -242,7 +297,6 @@ export class SovereignSecurityApiHandler {
         });
       }
 
-      // 8. Triage an Alert (Status Update)
       const triageMatch = url.pathname.match(/^\/api\/v1\/alerts\/([^/]+)\/triage$/);
       if (method === 'POST' && triageMatch) {
         const alertId = triageMatch[1]!;
@@ -267,7 +321,7 @@ export class SovereignSecurityApiHandler {
 
         this.broadcaster.broadcastAlert(existing);
 
-        this.auditService.append({
+        this.recordAudit({
           who: body.assignedTo || 'analyst-triage',
           what: `TRIAGE_ALERT:${alertId}`,
           where: '/api/v1/alerts/triage',
@@ -279,7 +333,6 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 200, { success: true, alert: existing });
       }
 
-      // 9. Ingest Security Alert Directly
       if (method === 'POST' && url.pathname === '/api/v1/alerts') {
         const body = await this.readJsonBody(req);
         const validation = safeValidateSecurityAlert(body);
@@ -293,10 +346,10 @@ export class SovereignSecurityApiHandler {
         const alert = validateSecurityAlert(validation.data);
         this.alertsStore.set(alert.alertId, alert);
         this.broadcaster.broadcastAlert(alert);
+        globalMetrics.incrementCounter('sovereign_security_alerts_generated_total');
         return this.sendJson(res, 201, { success: true, alert });
       }
 
-      // 10. Check AI Agent Tool Permissions
       if (method === 'POST' && url.pathname === '/api/v1/ai/tool-check') {
         const body = (await this.readJsonBody(req)) as {
           agentId: string;
@@ -319,30 +372,29 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 200, check);
       }
 
-      // 11. Append Audit Record
       if (method === 'POST' && url.pathname === '/api/v1/audit') {
         const body = await this.readJsonBody(req);
-        const record = this.auditService.append(body as any);
+        const record = this.recordAudit(body as any);
         return this.sendJson(res, 201, { success: true, record });
       }
 
-      // 12. Verify Audit Log Hash Chain Integrity
       if (method === 'GET' && url.pathname === '/api/v1/audit/verify') {
         const verification = this.auditService.verifyIntegrity();
         return this.sendJson(res, 200, verification);
       }
 
-      // 13. Ingest Metro Task Force (MTF) Event Webhook
       if (method === 'POST' && url.pathname === '/api/v1/ingest/mtf') {
         const body = await this.readJsonBody(req);
         const { event, alerts } = this.mtfAdapter.ingest(body as MTFRawSecurityPayload);
 
         this.recentEvents.push(event);
         this.broadcaster.broadcastEvent(event);
+        globalMetrics.incrementCounter('sovereign_security_events_ingested_total');
 
         for (const alert of alerts) {
           this.alertsStore.set(alert.alertId, alert);
           this.broadcaster.broadcastAlert(alert);
+          globalMetrics.incrementCounter('sovereign_security_alerts_generated_total');
         }
 
         return this.sendJson(res, 201, {
@@ -352,7 +404,6 @@ export class SovereignSecurityApiHandler {
         });
       }
 
-      // 14. AI Gateway: Inspect Input (Prompt Injection Defense)
       if (method === 'POST' && url.pathname === '/api/v1/ai/gateway/inspect-input') {
         const body = (await this.readJsonBody(req)) as {
           prompt: string;
@@ -369,7 +420,6 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 200, result);
       }
 
-      // 15. AI Gateway: Inspect Output (Model Armor Sanitizer)
       if (method === 'POST' && url.pathname === '/api/v1/ai/gateway/inspect-output') {
         const body = (await this.readJsonBody(req)) as {
           output: string;
@@ -389,7 +439,6 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 200, result);
       }
 
-      // 16. AI Gateway: Tool Execution Sandbox Check
       if (method === 'POST' && url.pathname === '/api/v1/ai/gateway/tool-execute') {
         const body = (await this.readJsonBody(req)) as {
           agentId: string;
@@ -412,7 +461,6 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 200, result);
       }
 
-      // 17. AI Gateway: Factual Grounding & Hallucination Check
       if (method === 'POST' && url.pathname === '/api/v1/ai/gateway/grounding-check') {
         const body = (await this.readJsonBody(req)) as {
           claim: string;
@@ -429,7 +477,6 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 200, result);
       }
 
-      // 18. Autonomous Agent: Sentinel Triage
       if (method === 'POST' && url.pathname === '/api/v1/agents/sentinel/triage') {
         const body = (await this.readJsonBody(req)) as { alert?: SecurityAlert; alertId?: string };
         let targetAlert = body.alert;
@@ -446,7 +493,6 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 200, triageResult);
       }
 
-      // 19. Autonomous Agent: Containment Quarantine
       if (method === 'POST' && url.pathname === '/api/v1/agents/containment/quarantine') {
         const body = (await this.readJsonBody(req)) as any;
         if (!body.targetType || !body.targetId || !body.reason) {
@@ -459,7 +505,6 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 201, result);
       }
 
-      // 20. Autonomous Agent: Containment Release
       if (method === 'POST' && url.pathname === '/api/v1/agents/containment/release') {
         const body = (await this.readJsonBody(req)) as any;
         if (!body.quarantineId || !body.releasedBy || !body.releaseReason) {
@@ -474,13 +519,11 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 200, { success });
       }
 
-      // 21. Autonomous Agent: Active Quarantines List
       if (method === 'GET' && url.pathname === '/api/v1/agents/containment/active') {
         const active = this.coordinator.getContainment().getActiveQuarantines();
         return this.sendJson(res, 200, { count: active.length, quarantines: active });
       }
 
-      // 22. Autonomous Agent: Forensics RCA
       if (method === 'POST' && url.pathname === '/api/v1/agents/forensics/rca') {
         const body = (await this.readJsonBody(req)) as { alert?: SecurityAlert; alertId?: string };
         let targetAlert = body.alert;
@@ -497,7 +540,6 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 200, rca);
       }
 
-      // 23. Autonomous Agent: Coordinator End-to-End Process
       if (method === 'POST' && url.pathname === '/api/v1/agents/coordinator/process') {
         const body = (await this.readJsonBody(req)) as any;
         if (!body.alert) {
@@ -510,32 +552,27 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 200, workflow);
       }
 
-      // 24. Compliance: Automated Certification Report
       if (method === 'GET' && url.pathname === '/api/v1/compliance/certify') {
         const framework = (url.searchParams.get('framework') || 'NIST_SP_800_207') as any;
         const report = this.compliance.certify(framework);
         return this.sendJson(res, 200, report);
       }
 
-      // 25. Compliance: List Available Frameworks
       if (method === 'GET' && url.pathname === '/api/v1/compliance/frameworks') {
         const frameworks = this.compliance.getAllFrameworks();
         return this.sendJson(res, 200, frameworks);
       }
 
-      // 26. Platform: Ecosystem Posture Report
       if (method === 'GET' && url.pathname === '/api/v1/platform/posture') {
         const posture = this.posture.getPostureReport();
         return this.sendJson(res, 200, posture);
       }
 
-      // 27. Platform: Synchronize Fleet Baselines
       if (method === 'POST' && url.pathname === '/api/v1/platform/posture/sync') {
         const syncResult = this.posture.syncBaselines();
         return this.sendJson(res, 200, syncResult);
       }
 
-      // 28. Platform: Master Operational Summary
       if (method === 'GET' && url.pathname === '/api/v1/platform/summary') {
         const auditVerification = this.auditService.verifyIntegrity();
         const posture = this.posture.getPostureReport();
@@ -544,10 +581,13 @@ export class SovereignSecurityApiHandler {
         const summary = {
           version: '1.0.0',
           releaseTag: 'v1.0.0',
+          phase: '2A',
+          phaseVersion: '2.0.0-phase2a',
           status: auditVerification.isValid ? 'OPTIMAL' : 'DEGRADED',
-          bootTimestamp: new Date().toISOString(),
+          bootTimestamp: this.bootTimestamp,
           components: {
             POLICY_ENGINE: 'ACTIVE',
+            DECISION_PROVENANCE_PIPELINE: 'ACTIVE',
             RISK_ENGINE: 'ACTIVE',
             THREAT_ENGINE: 'ACTIVE',
             IDENTITY_ABAC: 'ACTIVE',
@@ -557,6 +597,7 @@ export class SovereignSecurityApiHandler {
             AUTONOMOUS_AGENTS: 'ACTIVE',
             COMPLIANCE_CERTIFICATION: 'ACTIVE',
             POSTURE_SYNCHRONIZER: 'ACTIVE',
+            PERSISTENT_AUDIT_LEDGER: this.persistentLedger ? 'MOUNTED' : 'IN_MEMORY',
           },
           activeQuarantines,
           auditChainIntegrity: auditVerification.isValid,
@@ -571,7 +612,6 @@ export class SovereignSecurityApiHandler {
         return this.sendJson(res, 200, summary);
       }
 
-      // 404 Route Not Found
       return this.sendJson(res, 404, {
         error: 'NOT_FOUND',
         message: `Endpoint ${method} ${url.pathname} not recognized.`,
@@ -590,6 +630,13 @@ export class SovereignSecurityApiHandler {
     }
   }
 
+  private recordAudit(input: any) {
+    if (this.persistentLedger) {
+      return this.persistentLedger.append(input);
+    }
+    return this.auditService.append(input);
+  }
+
   private getDashboardHtml(): string {
     if (this.dashboardHtmlCache) {
       return this.dashboardHtmlCache;
@@ -603,10 +650,10 @@ export class SovereignSecurityApiHandler {
         return this.dashboardHtmlCache;
       }
     } catch {
-      // Fallback if bundled
+      // Fallback
     }
 
-    return '<html><body><h1>Sovereign Security Operations Dashboard V0.2</h1><p>Dashboard UI ready.</p></body></html>';
+    return '<html><body><h1>Sovereign Security Operations Dashboard V2.0</h1><p>Dashboard UI ready.</p></body></html>';
   }
 
   private sendJson(res: ServerResponse, statusCode: number, data: unknown): void {

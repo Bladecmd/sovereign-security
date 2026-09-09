@@ -1,0 +1,37 @@
+﻿services:
+  sovereign-security:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sovereign-security-runtime
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DATA_DIR=/data
+      - AUDIT_STORAGE_PATH=/data/audit.ledger
+    volumes:
+      # Append-only persistent ledger volume
+      - sovereign-audit-data:/data
+    # Security hardening options
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  sovereign-audit-data:
+    driver: local

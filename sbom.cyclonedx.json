@@ -1,0 +1,43 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:224ea5f7-2d8b-4aae-a8ff-501799779fb6",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-09-09T19:10:31.377Z",
+    "tools": [
+      {
+        "vendor": "Sovereign Security",
+        "name": "sovereign-sbom-engine",
+        "version": "0.5.0"
+      }
+    ],
+    "component": {
+      "type": "application",
+      "name": "sovereign-security",
+      "version": "1.0.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "zod",
+      "version": "3.23.8",
+      "purl": "pkg:npm/zod@3.23.8",
+      "hashes": [
+        {
+          "algorithm": "SHA-256",
+          "value": "750b81338b71d5e78ed66a065d072d2ab6b12e6aed146a736200bc63fc4f721b"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "scope": "required"
+    }
+  ]
+}

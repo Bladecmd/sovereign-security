@@ -1,5 +1,5 @@
 /**
- * Sovereign Security — Foundation V0.1
+ * Sovereign Security — Foundation V0.1 & Phase 2A
  * Core Package Entry Point
  *
  * Independent Identity, Security, Risk, and Governance Layer
@@ -88,8 +88,11 @@ export * from './compliance/certification.js';
 export * from './posture/synchronizer.js';
 export * from './platform/platform.js';
 
+// Phase 2A: Production Hardening, Zero-Trust Runtime & Decision Provenance
+export * from './types/provenance.js';
+export * from './policy/provenance.js';
+export * from './audit/persistent-storage.js';
+export * from './observability/metrics.js';
+
 // Roadmap Markers
 export * from './roadmap/markers.js';
-
-
-

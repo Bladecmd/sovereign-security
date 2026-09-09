@@ -1,18 +1,17 @@
 /**
- * Sovereign Security — Foundation V0.1
- * Local HTTP Mock API Server
- *
- * Runs a standalone HTTP daemon allowing Sovereign OS, MTF, and other local services
- * to emit live webhooks and query security policies.
+ * Sovereign Security — Milestone Phase 2A
+ * Local HTTP API Server & Production Daemon
  */
 
 import { createServer, Server } from 'node:http';
 import { StructuredLogger } from '../observability/logger.js';
+import { PersistentAuditLedger } from '../audit/persistent-storage.js';
 import { SovereignSecurityApiHandler } from './routes.js';
 
 export interface ServerConfig {
   port?: number;
   host?: string;
+  auditStoragePath?: string;
 }
 
 export function startSovereignSecurityServer(config: ServerConfig = {}): Promise<{
@@ -21,14 +20,24 @@ export function startSovereignSecurityServer(config: ServerConfig = {}): Promise
   stop: () => Promise<void>;
 }> {
   const port = config.port || Number(process.env.PORT) || 4000;
-  const host = config.host || '127.0.0.1';
+  const host = config.host || process.env.HOST || '127.0.0.1';
+  const auditPath = config.auditStoragePath || process.env.AUDIT_STORAGE_PATH;
 
   const logger = new StructuredLogger({
     serviceName: 'sovereign-security-server',
     minLevel: 'info',
   });
 
-  const handler = new SovereignSecurityApiHandler({ logger });
+  let persistentLedger: PersistentAuditLedger | undefined;
+  if (auditPath) {
+    persistentLedger = new PersistentAuditLedger(auditPath);
+    persistentLedger.initialize();
+  }
+
+  const handler = new SovereignSecurityApiHandler({
+    logger,
+    persistentLedger,
+  });
 
   return new Promise((resolve, reject) => {
     const server = createServer((req, res) => {
@@ -60,10 +69,11 @@ export function startSovereignSecurityServer(config: ServerConfig = {}): Promise
   });
 }
 
-// Direct CLI invocation
 if (process.argv[1]?.endsWith('server.ts') || process.argv[1]?.endsWith('server.js')) {
   startSovereignSecurityServer().then(({ port }) => {
     console.log(`[Sovereign Security API] Live on http://127.0.0.1:${port}`);
     console.log(`[Sovereign Security API] Health check: http://127.0.0.1:${port}/health`);
+    console.log(`[Sovereign Security API] Readiness probe: http://127.0.0.1:${port}/ready`);
+    console.log(`[Sovereign Security API] Prometheus Metrics: http://127.0.0.1:${port}/metrics`);
   });
 }

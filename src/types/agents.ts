@@ -1,6 +1,6 @@
 /**
- * Sovereign Security — Milestone V0.7
- * Autonomous Security Agents Type Contracts
+ * Sovereign Security — Milestone Phase 2A
+ * Containment Lifecycle Status & Security Contracts
  */
 
 import { AlertStatus, SecurityAlert } from './alerts.js';
@@ -34,12 +34,14 @@ export interface IncidentCluster {
 }
 
 export type QuarantineTargetType = 'ACTOR' | 'IP' | 'AGENT' | 'SERVICE';
+export type QuarantineStatus = 'ACTIVE' | 'EXPIRED' | 'RELEASED' | 'FAILED';
 
 export interface QuarantineRecord {
   quarantineId: string;
   targetType: QuarantineTargetType;
   targetId: string;
   reason: string;
+  status: QuarantineStatus;
   initiatedBy: string;
   createdAt: string;
   expiresAt: string;
@@ -47,6 +49,7 @@ export interface QuarantineRecord {
   releasedAt?: string;
   releasedBy?: string;
   releaseReason?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ContainmentRequest {
@@ -55,6 +58,7 @@ export interface ContainmentRequest {
   reason: string;
   ttlMs?: number;
   initiatedBy?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ContainmentResult {

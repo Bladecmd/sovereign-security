@@ -1,0 +1,28 @@
+﻿# Exclude git repository and sensitive configurations
+.git
+.gitignore
+.env
+.env.*
+secrets/
+private/
+*.pem
+*.key
+*.crt
+
+# Exclude local build and dependencies
+node_modules
+dist
+build
+coverage
+*.tsbuildinfo
+
+# Exclude tests and development configs
+tests/
+*.log
+npm-debug.log*
+
+# OS / Editor clutter
+.DS_Store
+Thumbs.db
+.vscode
+.idea
