@@ -94,5 +94,13 @@ export * from './policy/provenance.js';
 export * from './audit/persistent-storage.js';
 export * from './observability/metrics.js';
 
+// Phase 2B: Ecosystem Fleet Wiring
+export * from './integrations/auth/credentials.js';
+export * from './integrations/sovereign-os/client.js';
+export * from './integrations/mtf/adapter.js';
+export * from './integrations/compliance-labs/adapter.js';
+export * from './integrations/audioblue/ci-controls.js';
+export * from './integrations/gridd-corp/adapter.js';
+
 // Roadmap Markers
 export * from './roadmap/markers.js';
