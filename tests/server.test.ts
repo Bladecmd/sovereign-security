@@ -37,7 +37,7 @@ describe('Local HTTP Security API Server & Webhooks', () => {
     const body = (await res.json()) as { status: string; service: string; version: string };
     assert.equal(body.status, 'UP');
     assert.equal(body.service, 'sovereign-security');
-    assert.equal(body.version, '0.1.0');
+    assert.equal(body.version, '0.2.0');
   });
 
   test('POST /api/v1/events ingests valid SecurityEvent and logs to audit', async () => {

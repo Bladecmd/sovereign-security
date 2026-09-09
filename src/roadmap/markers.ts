@@ -9,7 +9,7 @@
 export interface RoadmapMilestone {
   version: string;
   name: string;
-  status: 'FOUNDATION' | 'PLANNED';
+  status: 'FOUNDATION' | 'IMPLEMENTED' | 'PLANNED';
   targetRelease: string;
   description: string;
   keyCapabilities: string[];
@@ -35,15 +35,15 @@ export const SOVEREIGN_SECURITY_ROADMAP: Record<string, RoadmapMilestone> = {
   V0_2: {
     version: 'V0.2',
     name: 'Security Dashboard',
-    status: 'PLANNED',
-    targetRelease: 'Future Milestone',
+    status: 'IMPLEMENTED',
+    targetRelease: '2026-Q3 (CURRENT)',
     description:
       'Executive real-time security dashboard visualizing ecosystem alerts, risk telemetry, audit logs, and compliance statuses across all Sovereign business units.',
     keyCapabilities: [
-      'Unified alert management triage workspace',
-      'Ecosystem risk score visualization',
-      'Audit log tamper-verification UI',
-      'Real-time incident streaming',
+      'Unified alert management triage workspace with one-click actions',
+      'Ecosystem risk score visualization & telemetry aggregation',
+      'Audit log tamper-verification UI with block-by-block inspection',
+      'Real-time Server-Sent Events (SSE) telemetry streaming',
     ],
   },
   V0_3: {

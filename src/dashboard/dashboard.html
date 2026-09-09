@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sovereign Security — Operations Dashboard V0.2</title>
+  <style>
+    :root {
+      --bg-dark: #0a0e17;
+      --card-bg: #111827;
+      --card-border: #1f2937;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent-cyan: #00e5ff;
+      --accent-red: #ff3366;
+      --accent-amber: #ffb703;
+      --accent-green: #00f59b;
+      --accent-blue: #3b82f6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, monospace; }
+    body { background-color: var(--bg-dark); color: var(--text-main); min-height: 100vh; padding: 24px; }
+    header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid var(--card-border); margin-bottom: 24px; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .badge { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .badge-v02 { background: rgba(0, 229, 255, 0.15); color: var(--accent-cyan); border: 1px solid var(--accent-cyan); }
+    .badge-crit { background: rgba(255, 51, 102, 0.15); color: var(--accent-red); border: 1px solid var(--accent-red); }
+    .badge-warn { background: rgba(255, 183, 3, 0.15); color: var(--accent-amber); border: 1px solid var(--accent-amber); }
+    .badge-good { background: rgba(0, 245, 155, 0.15); color: var(--accent-green); border: 1px solid var(--accent-green); }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
+    
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 24px; }
+    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 18px; }
+    .card-title { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .card-metric { font-size: 28px; font-weight: 800; }
+    
+    .main-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .feed-box { max-height: 440px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+    .event-item { background: #162032; border-left: 4px solid var(--accent-blue); border-radius: 4px; padding: 12px; font-size: 13px; }
+    .event-item.CRITICAL { border-left-color: var(--accent-red); background: rgba(255,51,102,0.08); }
+    .event-item.HIGH { border-left-color: var(--accent-amber); background: rgba(255,183,3,0.08); }
+    
+    .action-btn { background: #1f2937; color: var(--text-main); border: 1px solid #374151; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+    .action-btn:hover { background: #374151; border-color: var(--accent-cyan); }
+    .action-btn-danger { border-color: var(--accent-red); color: var(--accent-red); }
+    .action-btn-danger:hover { background: rgba(255,51,102,0.15); }
+    
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; padding: 8px; color: var(--text-muted); border-bottom: 1px solid var(--card-border); }
+    td { padding: 10px 8px; border-bottom: 1px solid #1a2234; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1 style="font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">SOVEREIGN SECURITY</h1>
+      <span class="badge badge-v02">Operations Dashboard V0.2</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <span style="font-size: 13px; color: var(--text-muted);"><span class="live-dot" id="sse-indicator"></span><span id="sse-status">Connecting live telemetry...</span></span>
+      <button class="action-btn" onclick="fetchAuditVerify()">Verify Hash Chain</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-title">Ecosystem Risk Score</div>
+      <div class="card-metric" id="metric-risk" style="color: var(--accent-green);">12 / 100</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Active Alerts (Triage)</div>
+      <div class="card-metric" id="metric-alerts" style="color: var(--accent-amber);">0</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Events Ingested</div>
+      <div class="card-metric" id="metric-events" style="color: var(--accent-cyan);">0</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Audit Chain Status</div>
+      <div class="card-metric" id="metric-audit" style="color: var(--accent-green); font-size: 20px;">VALID (TAMPER-FREE)</div>
+    </div>
+  </div>
+
+  <div class="main-layout">
+    <div>
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="section-header">
+          <h2 style="font-size: 15px;">Live Security Alerts & Triage Workspace</h2>
+          <span style="font-size: 12px; color: var(--text-muted);">Real-time incident response</span>
+        </div>
+        <div id="alerts-container">
+          <p style="color: var(--text-muted); font-size: 13px;">No open security alerts. Fleet operational parameters nominal.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-header">
+          <h2 style="font-size: 15px;">Live Telemetry Stream</h2>
+          <span style="font-size: 12px; color: var(--text-muted);">Incoming SecurityEvents</span>
+        </div>
+        <div class="feed-box" id="events-feed">
+          <!-- Real-time events injected here -->
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="section-header">
+          <h2 style="font-size: 15px;">Telemetry Simulator</h2>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Trigger synthetic test events to verify detection & triage pipelines:</p>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button class="action-btn" onclick="triggerSimulation('LOGIN_SUCCESS')">Simulate Admin Login (Nominal)</button>
+          <button class="action-btn action-btn-danger" onclick="triggerSimulation('BRUTE_FORCE')">Simulate MTF Brute Force (5x Fails)</button>
+          <button class="action-btn action-btn-danger" onclick="triggerSimulation('SECRET_LEAK')">Simulate Secret Exposure Incident</button>
+          <button class="action-btn" onclick="triggerSimulation('VEGA_CHECK')">Simulate VEGA Tool Permission Intercept</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-header">
+          <h2 style="font-size: 15px;">Cryptographic Audit Chain</h2>
+        </div>
+        <div id="audit-summary" style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+          Validating hash blocks...
+        </div>
+        <div style="max-height: 200px; overflow-y: auto;">
+          <table id="audit-table">
+            <thead>
+              <tr><th>Seq</th><th>Who</th><th>Action</th><th>Hash (SHA-256)</th></tr>
+            </thead>
+            <tbody id="audit-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let eventCount = 0;
+    let alertsMap = new Map();
+
+    // 1. Connect to Server-Sent Events (SSE)
+    const eventSource = new EventSource('/api/v1/events/stream');
+    eventSource.onopen = () => {
+      document.getElementById('sse-indicator').style.background = 'var(--accent-green)';
+      document.getElementById('sse-status').textContent = 'Telemetry stream active';
+    };
+    eventSource.onerror = () => {
+      document.getElementById('sse-indicator').style.background = 'var(--accent-red)';
+      document.getElementById('sse-status').textContent = 'Telemetry disconnected (reconnecting...)';
+    };
+
+    eventSource.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'EVENT') {
+        renderEvent(msg.data);
+      } else if (msg.type === 'ALERT') {
+        renderAlert(msg.data);
+      }
+    };
+
+    function renderEvent(event) {
+      eventCount++;
+      document.getElementById('metric-events').textContent = eventCount;
+      const feed = document.getElementById('events-feed');
+      const div = document.createElement('div');
+      div.className = `event-item ${event.severity}`;
+      div.innerHTML = `
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+          <span style="font-weight: 700;">[${event.source}] ${event.eventType}</span>
+          <span class="badge badge-${event.severity === 'CRITICAL' ? 'crit' : event.severity === 'HIGH' ? 'warn' : 'good'}">${event.severity}</span>
+        </div>
+        <div style="color: var(--text-muted);">Actor: <code>${event.actorId}</code> | Target: <code>${event.resourceId}</code> | Result: ${event.result}</div>
+      `;
+      feed.prepend(div);
+      if (feed.children.length > 30) feed.removeChild(feed.lastChild);
+      fetchStats();
+    }
+
+    function renderAlert(alert) {
+      alertsMap.set(alert.alertId, alert);
+      renderAlertsList();
+      fetchStats();
+    }
+
+    function renderAlertsList() {
+      const container = document.getElementById('alerts-container');
+      const alerts = Array.from(alertsMap.values()).filter(a => a.status !== 'RESOLVED' && a.status !== 'FALSE_POSITIVE');
+      document.getElementById('metric-alerts').textContent = alerts.length;
+
+      if (alerts.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-muted); font-size: 13px;">No open security alerts. Fleet operational parameters nominal.</p>';
+        return;
+      }
+
+      container.innerHTML = alerts.map(a => `
+        <div class="event-item ${a.severity}" style="margin-bottom: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+            <div>
+              <span style="font-weight: 700; font-size: 14px;">${a.title}</span>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">${a.description}</div>
+            </div>
+            <span class="badge badge-crit">${a.severity}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+            <span style="font-size: 11px; color: var(--text-muted);">Status: <strong>${a.status}</strong> | Risk Score: ${a.riskScore}</span>
+            <div style="display: flex; gap: 6px;">
+              ${a.status === 'OPEN' ? `<button class="action-btn" onclick="triageAlert('${a.alertId}', 'ACKNOWLEDGED')">Acknowledge</button>` : ''}
+              ${a.status !== 'CONTAINED' ? `<button class="action-btn" onclick="triageAlert('${a.alertId}', 'CONTAINED')">Contain</button>` : ''}
+              <button class="action-btn action-btn-danger" onclick="triageAlert('${a.alertId}', 'RESOLVED')">Resolve</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function triageAlert(alertId, newStatus) {
+      await fetch(`/api/v1/alerts/${alertId}/triage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      const alert = alertsMap.get(alertId);
+      if (alert) {
+        alert.status = newStatus;
+        renderAlertsList();
+      }
+    }
+
+    async function fetchStats() {
+      try {
+        const res = await fetch('/api/v1/telemetry/stats');
+        const data = await res.json();
+        const riskEl = document.getElementById('metric-risk');
+        riskEl.textContent = `${data.averageRiskScore} / 100`;
+        if (data.averageRiskScore > 75) riskEl.style.color = 'var(--accent-red)';
+        else if (data.averageRiskScore > 40) riskEl.style.color = 'var(--accent-amber)';
+        else riskEl.style.color = 'var(--accent-green)';
+      } catch (err) {}
+    }
+
+    async function fetchAuditVerify() {
+      const res = await fetch('/api/v1/audit/verify');
+      const data = await res.json();
+      const statusEl = document.getElementById('metric-audit');
+      if (data.isValid) {
+        statusEl.textContent = `VALID (${data.totalRecords} BLOCKS)`;
+        statusEl.style.color = 'var(--accent-green)';
+        document.getElementById('audit-summary').textContent = `All ${data.totalRecords} audit blocks verified against SHA-256 chain.`;
+      } else {
+        statusEl.textContent = 'TAMPER DETECTED';
+        statusEl.style.color = 'var(--accent-red)';
+        document.getElementById('audit-summary').textContent = `INTEGRITY ERROR: ${data.error}`;
+      }
+    }
+
+    async function triggerSimulation(type) {
+      if (type === 'LOGIN_SUCCESS') {
+        await fetch('/api/v1/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: 'sovereign-os',
+            businessId: 'biz-01',
+            environment: 'production',
+            severity: 'INFO',
+            category: 'AUTHENTICATION',
+            eventType: 'ADMIN_LOGIN_SUCCESS',
+            actorId: 'usr-admin-01',
+            resourceId: 'auth/session',
+            action: 'login',
+            result: 'SUCCESS',
+            riskScore: 10,
+            metadata: {},
+            correlationId: `sim-${Date.now()}`
+          })
+        });
+      } else if (type === 'BRUTE_FORCE') {
+        // Send 5 rapid failures to trigger the threat engine
+        for (let i = 0; i < 5; i++) {
+          await fetch('/api/v1/ingest/mtf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventType: 'ADMIN_LOGIN_FAILED',
+              operatorId: 'adversary-ip-sim',
+              targetEndpoint: 'mtf/dispatch/admin',
+              action: 'authenticate',
+              status: 'FAILED',
+              clientIp: '198.51.100.99',
+            })
+          });
+        }
+      } else if (type === 'SECRET_LEAK') {
+        await fetch('/api/v1/ingest/mtf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventType: 'SECRET_EXPOSURE',
+            operatorId: 'dev-pipeline',
+            targetEndpoint: 'config/keys/jwt',
+            action: 'read_secret',
+            status: 'FAILED',
+            metadata: { leakedClassification: 'PRIVATE_KEY' }
+          })
+        });
+      } else if (type === 'VEGA_CHECK') {
+        await fetch('/api/v1/ai/tool-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId: 'vega', toolName: 'transfer_funds' })
+        });
+      }
+      fetchAuditVerify();
+    }
+
+    // Initial load
+    fetchAuditVerify();
+    fetchStats();
+  </script>
+</body>
+</html>
