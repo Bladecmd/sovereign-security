@@ -1,0 +1,37 @@
+{
+  "name": "sovereign-security",
+  "version": "0.1.0",
+  "description": "Sovereign Security Foundation V0.1 — Independent Identity, Security, Risk, and Governance Layer",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test:coverage": "node --import tsx --test --experimental-test-coverage tests/**/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "sovereign",
+    "security",
+    "identity",
+    "governance",
+    "zero-trust",
+    "ai-security",
+    "threat-detection"
+  ],
+  "author": "Sovereign Security Core Team",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
