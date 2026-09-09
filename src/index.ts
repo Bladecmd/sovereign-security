@@ -47,5 +47,9 @@ export * from './observability/logger.js';
 export * from './integrations/sovereign-os/client.js';
 export * from './integrations/mtf/adapter.js';
 
+// Local Mock HTTP Server
+export * from './server/routes.js';
+export * from './server/server.js';
+
 // Roadmap Markers
 export * from './roadmap/markers.js';
