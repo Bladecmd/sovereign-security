@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00e5ff"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="innerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#070b12"/>
+      <stop offset="100%" stop-color="#0d1322"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Shield Outline -->
+  <path d="M16 2 L28 6 V15 C28 22.5 22.5 28.5 16 30 C9.5 28.5 4 22.5 4 15 V6 Z" fill="url(#innerGrad)" stroke="url(#shieldGrad)" stroke-width="2" stroke-linejoin="round"/>
+  <!-- Inner Sovereign Core Symbol -->
+  <path d="M16 8 L22 10.5 V15.5 C22 19.5 19.2 23.5 16 25 C12.8 23.5 10 19.5 10 15.5 V10.5 Z" fill="#121a2d" stroke="#00f59b" stroke-width="1.2"/>
+  <!-- Center Node / Key / Lock -->
+  <circle cx="16" cy="15" r="2.2" fill="#00e5ff"/>
+  <path d="M16 16.5 V21" stroke="#00e5ff" stroke-width="1.8" stroke-linecap="round"/>
+</svg>

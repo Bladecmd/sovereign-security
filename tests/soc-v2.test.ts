@@ -72,6 +72,18 @@ describe('Phase 2C: Security Operations Center V2 Interface & Control Plane', ()
       assert.match(html, /modal-release-reason/i);
       assert.match(html, /modal-confirm-check/i);
     });
+
+    test('GET /favicon.svg and GET /favicon.ico serve valid Sovereign Security favicon', async () => {
+      const resSvg = await fetch(`${baseUrl}/favicon.svg`);
+      assert.equal(resSvg.status, 200);
+      assert.match(resSvg.headers.get('content-type') || '', /image\/svg\+xml/);
+      const svgText = await resSvg.text();
+      assert.match(svgText, /<svg/);
+
+      const resIco = await fetch(`${baseUrl}/favicon.ico`);
+      assert.equal(resIco.status, 200);
+      assert.match(resIco.headers.get('content-type') || '', /image\/svg\+xml/);
+    });
   });
 
   // =========================================================================

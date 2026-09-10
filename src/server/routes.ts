@@ -139,6 +139,15 @@ export class SovereignSecurityApiHandler {
         return;
       }
 
+      if (method === 'GET' && (url.pathname === '/favicon.ico' || url.pathname === '/favicon.svg')) {
+        const svg = this.getFaviconSvg();
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.statusCode = 200;
+        res.end(svg);
+        return;
+      }
+
       if (method === 'GET' && url.pathname === '/api/v1/events/stream') {
         this.broadcaster.addClient(res);
         return;
@@ -1101,11 +1110,33 @@ export class SovereignSecurityApiHandler {
         this.dashboardHtmlCache = readFileSync(htmlPath, 'utf-8');
         return this.dashboardHtmlCache;
       }
+      const srcHtmlPath = join(currentDir, '..', '..', 'src', 'dashboard', 'dashboard.html');
+      if (existsSync(srcHtmlPath)) {
+        this.dashboardHtmlCache = readFileSync(srcHtmlPath, 'utf-8');
+        return this.dashboardHtmlCache;
+      }
     } catch {
       // Fallback
     }
 
     return '<html><body><h1>Sovereign Security Operations Dashboard V2.0</h1><p>Dashboard UI ready.</p></body></html>';
+  }
+
+  private getFaviconSvg(): string {
+    try {
+      const currentDir = dirname(fileURLToPath(import.meta.url));
+      const svgPath = join(currentDir, '..', 'dashboard', 'favicon.svg');
+      if (existsSync(svgPath)) {
+        return readFileSync(svgPath, 'utf-8');
+      }
+      const srcSvgPath = join(currentDir, '..', '..', 'src', 'dashboard', 'favicon.svg');
+      if (existsSync(srcSvgPath)) {
+        return readFileSync(srcSvgPath, 'utf-8');
+      }
+    } catch {
+      // Fallback
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00e5ff"/><stop offset="100%" stop-color="#3b82f6"/></linearGradient></defs><path d="M16 2 L28 6 V15 C28 22.5 22.5 28.5 16 30 C9.5 28.5 4 22.5 4 15 V6 Z" fill="#0d1322" stroke="url(#sg)" stroke-width="2"/><circle cx="16" cy="15" r="2.2" fill="#00e5ff"/></svg>`;
   }
 
   private sendJson(res: ServerResponse, statusCode: number, data: unknown): void {
