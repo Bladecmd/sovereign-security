@@ -28,6 +28,7 @@ import { SecurityDecisionInput } from '../types/provenance.js';
 import { safeValidateSecurityAlert, validateSecurityAlert } from '../schemas/alert.schema.js';
 import { safeValidateSecurityEvent } from '../schemas/event.schema.js';
 import { TelemetryBroadcaster } from './sse.js';
+import { ApplicationRateLimiter } from './rate-limiter.js';
 
 export class SovereignSecurityApiHandler {
   private policyEngine: PolicyEngine;
@@ -45,6 +46,7 @@ export class SovereignSecurityApiHandler {
   private recentEvents: SecurityEvent[] = [];
   private broadcaster: TelemetryBroadcaster;
   private logger: StructuredLogger;
+  private rateLimiter: ApplicationRateLimiter;
   private dashboardHtmlCache: string | null = null;
   private bootTimestamp: string = new Date().toISOString();
 
@@ -60,6 +62,7 @@ export class SovereignSecurityApiHandler {
     posture?: PostureSynchronizer;
     broadcaster?: TelemetryBroadcaster;
     logger?: StructuredLogger;
+    rateLimiter?: ApplicationRateLimiter;
   }) {
     this.persistentLedger = options?.persistentLedger;
     this.auditService =
@@ -85,6 +88,11 @@ export class SovereignSecurityApiHandler {
     this.mtfAdapter = new MetroTaskForceAdapter(this.threatEngine);
     this.logger =
       options?.logger || new StructuredLogger({ serviceName: 'sovereign-security-api' });
+    this.rateLimiter = options?.rateLimiter || new ApplicationRateLimiter();
+  }
+
+  public getRateLimiter(): ApplicationRateLimiter {
+    return this.rateLimiter;
   }
 
   public async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -94,6 +102,33 @@ export class SovereignSecurityApiHandler {
 
     res.setHeader('X-Security-Version', '2.0.0-phase2c');
     res.setHeader('X-Correlation-Id', correlationId);
+
+    // Application-layer tiered rate limiting
+    const rawIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || '127.0.0.1';
+    const hasAuth = Boolean(req.headers.authorization || req.headers['x-api-key'] || req.headers['x-service-id']);
+    const tier = this.rateLimiter.resolveTier(url.pathname, hasAuth);
+    const limitCheck = this.rateLimiter.checkLimit(rawIp, tier);
+
+    if (!limitCheck.allowed) {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Retry-After', limitCheck.retryAfterSeconds.toString());
+      res.setHeader('X-RateLimit-Limit', limitCheck.maxRequests.toString());
+      res.setHeader('X-RateLimit-Remaining', '0');
+      res.setHeader('X-RateLimit-Reset', Math.ceil(limitCheck.resetTimeMs / 1000).toString());
+      res.statusCode = 429;
+      res.end(
+        JSON.stringify({
+          error: 'TOO_MANY_REQUESTS',
+          message: `Application rate limit exceeded for tier '${tier}'. Please retry after ${limitCheck.retryAfterSeconds} seconds.`,
+          retryAfter: limitCheck.retryAfterSeconds,
+          tier,
+        })
+      );
+      return;
+    }
+
+    res.setHeader('X-RateLimit-Limit', limitCheck.maxRequests.toString());
+    res.setHeader('X-RateLimit-Remaining', limitCheck.remainingRequests.toString());
 
     try {
       if (method === 'GET' && (url.pathname === '/' || url.pathname === '/dashboard')) {

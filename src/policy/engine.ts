@@ -36,22 +36,52 @@ export class PolicyEngine {
    * Evaluate a requested action against all registered policy rules and identity constraints
    */
   public evaluate(input: PolicyEvaluationInput): PolicyDecision {
+    return this.evaluateWithPrecedence(input).decision;
+  }
+
+  /**
+   * Evaluates input while capturing the complete prioritized precedence chain
+   */
+  public evaluateWithPrecedence(input: PolicyEvaluationInput): {
+    decision: PolicyDecision;
+    chain: { ruleId: string; name: string; priority: number; matched: boolean; outcome?: string }[];
+  } {
     const timestamp = new Date().toISOString();
+    const chain: { ruleId: string; name: string; priority: number; matched: boolean; outcome?: string }[] = [];
 
     // 1. Iterate through registered prioritized rules
     for (const rule of this.rules) {
       const decision = rule.evaluate(input);
       if (decision) {
-        return decision;
+        chain.push({
+          ruleId: rule.id,
+          name: rule.name,
+          priority: rule.priority,
+          matched: true,
+          outcome: decision.decision,
+        });
+        return { decision, chain };
+      } else {
+        chain.push({
+          ruleId: rule.id,
+          name: rule.name,
+          priority: rule.priority,
+          matched: false,
+        });
       }
     }
 
-    // 2. Default Zero-Trust Fallback: If no rule permits or matches, deny.
-    return {
+    // 2. Default Zero-Trust Fallback
+    const fallback: PolicyDecision = {
       decision: 'DENY',
       reason: 'Default zero-trust policy deny: no policy rule explicitly permitted this action.',
       evaluatedAt: timestamp,
     };
+    return { decision: fallback, chain };
+  }
+
+  public getRules(): readonly PolicyRule[] {
+    return this.rules;
   }
 
   private registerDefaultRules(): void {

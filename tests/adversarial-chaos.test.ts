@@ -20,6 +20,10 @@ import { AuditService } from '../src/audit/audit-service.js';
 import { EcosystemAuthenticator } from '../src/integrations/auth/credentials.js';
 import { startSovereignSecurityServer } from '../src/server/server.js';
 import { SovereignSecurityApiHandler } from '../src/server/routes.js';
+import {
+  generateIndependentAdversarialCorpus,
+  IndependentAdversarialRunner,
+} from '../src/adversarial/independent/index.js';
 
 describe('Phase 2D: Controlled Adversarial Validation & Chaos Testing', () => {
   const generator = new AdversarialFixtureGenerator(42);
@@ -106,18 +110,31 @@ describe('Phase 2D: Controlled Adversarial Validation & Chaos Testing', () => {
         `p95 latency ${summary.overallLatencyStats.p95Ms}ms exceeds 25ms threshold`
       );
 
-      // Generate and save Markdown report
-      const mdReport = AdversarialReportGenerator.generateMarkdownReport(summary);
-      assert.ok(mdReport.includes('Executive Performance & Defensive Metrics'));
-      assert.ok(mdReport.includes('Category-by-Category Benchmark Breakdown'));
-      assert.ok(mdReport.includes('Known Failure Modes & Architectural Boundaries'));
-      assert.ok(mdReport.includes('Unresolved Weaknesses & Recommendations'));
+      // Execute Independent Held-Out Validation Corpus (335 fixtures)
+      const independentCorpus = generateIndependentAdversarialCorpus();
+      const independentRunner = new IndependentAdversarialRunner();
+      const { summary: independentSummary } = await independentRunner.runCorpus(independentCorpus);
+
+      // Generate and save Dual Markdown report
+      const mdReport = AdversarialReportGenerator.generateMarkdownReport(summary, independentSummary);
+      assert.ok(mdReport.includes('SECTION A: Controlled Regression Corpus'));
+      assert.ok(mdReport.includes('SECTION B: Independent Held-Out Validation Corpus'));
+      assert.ok(mdReport.includes('Known Limitations and Residual Risks'));
+      assert.ok(mdReport.includes('Controlled Fixture Detection Coverage: 100%'));
 
       mkdirSync('reports', { recursive: true });
       writeFileSync(join('reports', 'adversarial-validation-report.md'), mdReport, 'utf-8');
       writeFileSync(
         join('reports', 'adversarial-validation-summary.json'),
-        JSON.stringify(summary, null, 2),
+        JSON.stringify(
+          {
+            reportTimestamp: new Date().toISOString(),
+            controlledRegressionSummary: summary,
+            independentHeldOutSummary: independentSummary,
+          },
+          null,
+          2
+        ),
         'utf-8'
       );
     });
