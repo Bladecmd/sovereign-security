@@ -1016,7 +1016,25 @@ export class SovereignSecurityApiHandler {
         message: `Endpoint ${method} ${url.pathname} not recognized.`,
       });
     } catch (err: unknown) {
+      const errorObj = err as { code?: string; message?: string } | Error;
+      const errorCode = (errorObj && 'code' in errorObj && errorObj.code) || 'INTERNAL_SERVER_ERROR';
       const errorMsg = err instanceof Error ? err.message : String(err);
+
+      if (errorCode === 'PAYLOAD_TOO_LARGE') {
+        res.setHeader('Connection', 'close');
+        return this.sendJson(res, 413, {
+          error: 'PAYLOAD_TOO_LARGE',
+          message: 'Request payload exceeds maximum allowed size limit.',
+        });
+      }
+
+      if (errorCode === 'MALFORMED_JSON') {
+        return this.sendJson(res, 400, {
+          error: 'BAD_REQUEST',
+          message: errorMsg,
+        });
+      }
+
       this.logger.error('req-error', 'handleRequest', correlationId, {
         code: 'INTERNAL_SERVER_ERROR',
         message: errorMsg,
@@ -1060,10 +1078,23 @@ export class SovereignSecurityApiHandler {
     res.end(JSON.stringify(data, null, 2));
   }
 
+  public static readonly MAX_BODY_SIZE_BYTES = 1024 * 1024; // 1MB
+
   private async readJsonBody(req: IncomingMessage): Promise<unknown> {
     return new Promise((resolve, reject) => {
       let raw = '';
-      req.on('data', (chunk) => {
+      let bytesReceived = 0;
+
+      req.on('data', (chunk: Buffer | string) => {
+        bytesReceived += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
+        if (bytesReceived > SovereignSecurityApiHandler.MAX_BODY_SIZE_BYTES) {
+          req.pause();
+          req.removeAllListeners('data');
+          const err = new Error('Payload too large');
+          (err as any).code = 'PAYLOAD_TOO_LARGE';
+          reject(err);
+          return;
+        }
         raw += chunk;
       });
       req.on('end', () => {
@@ -1074,7 +1105,9 @@ export class SovereignSecurityApiHandler {
         try {
           resolve(JSON.parse(raw));
         } catch {
-          reject(new Error('Malformed JSON payload received'));
+          const err = new Error('Malformed JSON payload received');
+          (err as any).code = 'MALFORMED_JSON';
+          reject(err);
         }
       });
       req.on('error', reject);

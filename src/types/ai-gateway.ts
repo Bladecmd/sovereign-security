@@ -10,7 +10,8 @@ export type PromptInjectionCategory =
   | 'DELIMITER_HIJACK'
   | 'OBFUSCATED_PAYLOAD'
   | 'ROLEPLAY_JAILBREAK'
-  | 'SYSTEM_PROMPT_EXTRACTION';
+  | 'SYSTEM_PROMPT_EXTRACTION'
+  | 'INSTRUCTION_HIERARCHY';
 
 export interface PromptInjectionResult {
   detected: boolean;

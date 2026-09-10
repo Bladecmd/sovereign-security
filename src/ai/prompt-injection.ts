@@ -75,12 +75,40 @@ export class PromptInjectionDetector {
       {
         category: 'DELIMITER_HIJACK',
         name: 'raw_role_markers',
-        regex: /(###\s*(System|Human|Assistant|Developer)\s*:|^System:\s*\n)/im,
-        weight: 0.8,
+        regex: /(###\s*(System|Human|Assistant|Developer)\s*:|(?:^|\n)\s*(System|Human|Assistant|Developer)\s*:\s*)/im,
+        weight: 0.85,
       }
     );
 
-    // 3. Roleplay & Jailbreak Personas
+    // 3. Instruction Hierarchy & Authority Impersonation
+    this.rules.push(
+      {
+        category: 'INSTRUCTION_HIERARCHY',
+        name: 'authority_impersonation',
+        regex: /(?:i\s+am|speaking\s+as|acting\s+as)\s+(?:the\s+)?(?:root|system|chief|lead|senior|principal|security)\s+(?:system\s+)?(?:admin|administrator|developer|architect|officer)\b/i,
+        weight: 0.9,
+      },
+      {
+        category: 'INSTRUCTION_HIERARCHY',
+        name: 'priority_override',
+        regex: /(?:priority|supreme|critical|higher\s+priority)\s+(?:override|directive|instruction|system\s+update)\s*[:=]/i,
+        weight: 0.9,
+      },
+      {
+        category: 'INSTRUCTION_HIERARCHY',
+        name: 'simulated_system_envelope',
+        regex: /(?:<system>|<\/system>|<developer>|<\/developer>|\[system_instruction\]|\[admin_directive\])/i,
+        weight: 0.9,
+      },
+      {
+        category: 'INSTRUCTION_HIERARCHY',
+        name: 'developer_override_authority',
+        regex: /(?:developer\s+override|admin\s+mode\s+authorized|elevated\s+execution\s+context\s+granted)/i,
+        weight: 0.9,
+      }
+    );
+
+    // 4. Roleplay & Jailbreak Personas
     this.rules.push(
       {
         category: 'ROLEPLAY_JAILBREAK',
@@ -108,19 +136,19 @@ export class PromptInjectionDetector {
       }
     );
 
-    // 4. System Prompt Extraction
+    // 5. System Prompt Extraction
     this.rules.push(
       {
         category: 'SYSTEM_PROMPT_EXTRACTION',
         name: 'extract_system_prompt',
-        regex: /(repeat\s+(everything|the\s+words|all\s+instructions)\s+above|what\s+(is|was)\s+your\s+(original|initial|system)\s+(prompt|instructions))/i,
-        weight: 0.8,
+        regex: /(repeat\s+(everything|the\s+words|all\s+instructions)\s+above|what\s+(is|was)\s+your\s+(original|initial|system)\s+(prompt|instructions)|repeat\s+everything\s+above\s+starting\s+from)/i,
+        weight: 0.85,
       },
       {
         category: 'SYSTEM_PROMPT_EXTRACTION',
         name: 'print_internal_rules',
-        regex: /(output|print|reveal|display|leak)\s+(your\s+)?(internal|hidden|developer|system)\s+(prompt|rules|configuration)/i,
-        weight: 0.85,
+        regex: /(output|print|reveal|display|leak)\s+(your\s+)?(?:(?:internal|hidden|secret|developer|system|original|initial)\s+)*(?:prompt|rules|configuration|instructions|directives)/i,
+        weight: 0.9,
       }
     );
   }

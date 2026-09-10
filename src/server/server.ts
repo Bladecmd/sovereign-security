@@ -45,16 +45,18 @@ export function startSovereignSecurityServer(config: ServerConfig = {}): Promise
     });
 
     server.listen(port, host, () => {
+      const address = server.address();
+      const actualPort = typeof address === 'object' && address ? address.port : port;
       logger.info(
         'server-init',
         'start',
         'server-boot',
         'SUCCESS',
-        { port, host, environment: process.env.NODE_ENV || 'development' }
+        { port: actualPort, host, environment: process.env.NODE_ENV || 'development' }
       );
       resolve({
         server,
-        port,
+        port: actualPort,
         stop: () =>
           new Promise<void>((res, rej) => {
             server.close((err) => (err ? rej(err) : res()));
