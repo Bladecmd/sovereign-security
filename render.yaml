@@ -1,0 +1,63 @@
+# Sovereign Security Platform — Production Render Blueprint Specification
+# Infrastructure as Code (IaC) for Render Cloud Deployment (render.yaml)
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # Sovereign Security Web Service (SOC V2 Dashboard, REST API & Telemetry Gateway)
+  - type: web
+    name: sovereign-security
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter          # Starter or Standard recommended for persistent audit disk; works on free tier without disk
+    region: frankfurt      # Options: frankfurt (eu-central), oregon (us-west), ohio (us-east), singapore (ap-southeast)
+    branch: master
+    autoDeploy: true
+
+    # Health & Readiness Monitoring
+    healthCheckPath: /health
+
+    # Persistent Storage for Append-Only Cryptographic Audit Ledger
+    # Note: Render persistent disks require Starter plan or above.
+    # For Free Tier deployment, comment out the disk section below.
+    disk:
+      name: sovereign-audit-ledger
+      mountPath: /data
+      sizeGB: 1
+
+    # Production Environment Variables
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: PORT
+        value: 4000
+
+      - key: HOST
+        value: 0.0.0.0
+
+      - key: AUDIT_STORAGE_PATH
+        value: /data/audit.log
+
+      - key: LOG_LEVEL
+        value: info
+
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+
+      - key: REPLAY_PROTECTION_ENABLED
+        value: "true"
+
+      # Ecosystem Service Authentication Keys (Set in Render Dashboard > Environment)
+      # Do NOT commit actual secrets here. Place real keys in Render's Secret Manager.
+      - key: SOVEREIGN_OS_API_KEY
+        generateValue: true
+
+      - key: MTF_GATEWAY_API_KEY
+        generateValue: true
+
+      - key: VEGA_AGENT_SECRET
+        generateValue: true
+
+      - key: PROVENANCE_HMAC_SECRET
+        generateValue: true

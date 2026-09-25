@@ -20,7 +20,7 @@ export function startSovereignSecurityServer(config: ServerConfig = {}): Promise
   stop: () => Promise<void>;
 }> {
   const port = typeof config.port === 'number' ? config.port : (Number(process.env.PORT) || 4000);
-  const host = config.host || process.env.HOST || '127.0.0.1';
+  const host = config.host || process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
   const auditPath = config.auditStoragePath || process.env.AUDIT_STORAGE_PATH;
 
   const logger = new StructuredLogger({

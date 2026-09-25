@@ -6,12 +6,12 @@
   "types": "dist/index.d.ts",
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-assets.js",
     "test": "npx tsx tests/run-all.ts",
     "test:coverage": "npx tsx --experimental-test-coverage tests/run-all.ts",
     "typecheck": "tsc --noEmit",
     "sbom": "node -e \"import('./dist/supply-chain/sbom.js').then(m => { const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf-8')); const sbom = m.SBOMGenerator.generateCycloneDX(pkg); fs.writeFileSync('./sbom.cyclonedx.json', JSON.stringify(sbom, null, 2)); console.log('SBOM generated successfully'); })\"",
-    "start": "node dist/index.js",
+    "start": "node dist/server/server.js",
     "server": "node --import tsx src/server/server.ts"
   },
   "keywords": [

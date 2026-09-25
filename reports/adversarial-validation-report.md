@@ -1,9 +1,9 @@
 # Sovereign Security — V1.1 Production Resilience: Adversarial Validation & Chaos Report
 
-**Generated**: `2026-09-10T15:16:15.369Z`  
+**Generated**: `2026-09-25T11:10:01.859Z`  
 **Controlled Regression Fixtures**: `1130` (`882` attack fixtures, `248` benign control fixtures)  
 **Independent Held-Out Fixtures**: `335` fixtures across 13 distinct categories  
-**Regression Execution Duration**: `440 ms` (`2568.2 req/sec`)  
+**Regression Execution Duration**: `388 ms` (`2912.4 req/sec`)  
 **Overall Assessment**: `PASSED ALL DETERMINISTIC INVARIANTS`  
 
 > [!IMPORTANT]
@@ -25,31 +25,31 @@
 | **Containment Rate** | **100%** | $\ge 98.0\%$ | ✅ COMPLIANT |
 | **Audit Completeness** | **100%** | $100.0\%$ | ✅ COMPLIANT |
 | **False Positive Rate (Benign Controls)** | **0%** | $\le 2.0\%$ | ✅ COMPLIANT |
-| **Median Latency ($p_{50}$)** | **0.034 ms** | $< 5.0\text{ ms}$ | ✅ OPTIMAL |
-| **95th Percentile ($p_{95}$)** | **3.679 ms** | $< 15.0\text{ ms}$ | ✅ OPTIMAL |
-| **99th Percentile ($p_{99}$)** | **6.319 ms** | $< 35.0\text{ ms}$ | ✅ OPTIMAL |
-| **Throughput** | **2568.2 req/s** | $\ge 500\text{ req/s}$ | ✅ OPTIMAL |
+| **Median Latency ($p_{50}$)** | **0.032 ms** | $< 5.0\text{ ms}$ | ✅ OPTIMAL |
+| **95th Percentile ($p_{95}$)** | **3.017 ms** | $< 15.0\text{ ms}$ | ✅ OPTIMAL |
+| **99th Percentile ($p_{99}$)** | **6.081 ms** | $< 35.0\text{ ms}$ | ✅ OPTIMAL |
+| **Throughput** | **2912.4 req/s** | $\ge 500\text{ req/s}$ | ✅ OPTIMAL |
 
 ### Category-by-Category Regression Breakdown
 
 | Category | Total | Pass | Detect % | Prevent % | Contain % | Audit % | $p_{50}$ (ms) | $p_{95}$ (ms) | $p_{99}$ (ms) |
 |---|---|---|---|---|---|---|---|---|---|
-| `PROMPT_INJECTION` | 100 | 100 | 100% | 100% | 0% | 100% | 0.132 | 0.330 | 9.893 |
-| `INSTRUCTION_HIERARCHY` | 75 | 75 | 100% | 100% | 0% | 100% | 0.091 | 0.175 | 1.931 |
-| `CHATML_DELIMITER` | 65 | 65 | 100% | 100% | 0% | 100% | 0.112 | 0.151 | 0.184 |
-| `TOOL_PERMISSION_ESCALATION` | 75 | 75 | 100% | 100% | 0% | 100% | 0.008 | 0.060 | 0.587 |
-| `MALICIOUS_TOOL_ARGS` | 80 | 80 | 100% | 100% | 0% | 100% | 0.004 | 0.009 | 0.009 |
-| `POLICY_BYPASS` | 75 | 75 | 100% | 100% | 0% | 100% | 0.015 | 0.193 | 1.480 |
-| `MALFORMED_AUTH` | 75 | 75 | 100% | 100% | 0% | 100% | 0.015 | 0.192 | 1.448 |
-| `REPLAY_ATTACK` | 65 | 65 | 49.2% | 49.2% | 0% | 100% | 0.021 | 0.038 | 0.091 |
-| `MALFORMED_EVENT` | 75 | 75 | 100% | 100% | 0% | 100% | 0.219 | 1.008 | 4.786 |
-| `OVERSIZED_PAYLOAD` | 55 | 55 | 100% | 100% | 0% | 100% | 0.001 | 0.002 | 0.018 |
-| `CONCURRENT_REQUESTS` | 70 | 70 | 0% | 0% | 0% | 100% | 0.030 | 0.036 | 0.144 |
-| `BRUTE_FORCE_SPIKE` | 65 | 65 | 100% | 100% | 100% | 100% | 0.013 | 0.031 | 0.467 |
-| `CONTROLLED_DDOS` | 55 | 55 | 0% | 0% | 0% | 100% | 0.001 | 0.002 | 0.008 |
-| `AUDIT_LEDGER_CONCURRENCY` | 70 | 70 | 100% | 100% | 0% | 100% | 4.031 | 7.151 | 8.420 |
-| `CONTAINMENT_RACE_CONDITION` | 65 | 65 | 100% | 100% | 67.7% | 100% | 0.058 | 0.140 | 0.763 |
-| `BENIGN_CONTROL` | 65 | 65 | 0% | 0% | 0% | 100% | 0.039 | 0.050 | 0.100 |
+| `PROMPT_INJECTION` | 100 | 100 | 100% | 100% | 0% | 100% | 0.096 | 0.294 | 4.980 |
+| `INSTRUCTION_HIERARCHY` | 75 | 75 | 100% | 100% | 0% | 100% | 0.116 | 0.178 | 0.258 |
+| `CHATML_DELIMITER` | 65 | 65 | 100% | 100% | 0% | 100% | 0.072 | 0.141 | 2.932 |
+| `TOOL_PERMISSION_ESCALATION` | 75 | 75 | 100% | 100% | 0% | 100% | 0.004 | 0.021 | 0.257 |
+| `MALICIOUS_TOOL_ARGS` | 80 | 80 | 100% | 100% | 0% | 100% | 0.002 | 0.005 | 0.014 |
+| `POLICY_BYPASS` | 75 | 75 | 100% | 100% | 0% | 100% | 0.011 | 0.035 | 0.289 |
+| `MALFORMED_AUTH` | 75 | 75 | 100% | 100% | 0% | 100% | 0.008 | 0.104 | 0.715 |
+| `REPLAY_ATTACK` | 65 | 65 | 49.2% | 49.2% | 0% | 100% | 0.008 | 0.014 | 0.036 |
+| `MALFORMED_EVENT` | 75 | 75 | 100% | 100% | 0% | 100% | 0.101 | 0.280 | 6.723 |
+| `OVERSIZED_PAYLOAD` | 55 | 55 | 100% | 100% | 0% | 100% | 0.001 | 0.002 | 0.016 |
+| `CONCURRENT_REQUESTS` | 70 | 70 | 0% | 0% | 0% | 100% | 0.031 | 0.066 | 0.128 |
+| `BRUTE_FORCE_SPIKE` | 65 | 65 | 100% | 100% | 100% | 100% | 0.020 | 0.045 | 0.597 |
+| `CONTROLLED_DDOS` | 55 | 55 | 0% | 0% | 0% | 100% | 0.002 | 0.005 | 0.022 |
+| `AUDIT_LEDGER_CONCURRENCY` | 70 | 70 | 100% | 100% | 0% | 100% | 3.900 | 7.257 | 9.407 |
+| `CONTAINMENT_RACE_CONDITION` | 65 | 65 | 100% | 100% | 67.7% | 100% | 0.077 | 0.167 | 0.981 |
+| `BENIGN_CONTROL` | 65 | 65 | 0% | 0% | 0% | 100% | 0.036 | 0.064 | 0.073 |
 
 ---
 
@@ -63,9 +63,9 @@
 | **Prevention Coverage** | **78.1%** | Zero-trust policy rejection / containment rate |
 | **False Positive Rate** | **0%** | Benign near-boundary operational queries |
 | **False Negative Rate** | **21.9%** | Tested evasion vectors in held-out corpus |
-| **Median Latency ($p_{50}$)** | **0.046 ms** | Real-time gateway evaluation overhead |
-| **95th Percentile ($p_{95}$)** | **0.530 ms** | Tail latency under deep regex & normalization |
-| **99th Percentile ($p_{99}$)** | **0.716 ms** | Max burst response window |
+| **Median Latency ($p_{50}$)** | **0.040 ms** | Real-time gateway evaluation overhead |
+| **95th Percentile ($p_{95}$)** | **0.562 ms** | Tail latency under deep regex & normalization |
+| **99th Percentile ($p_{99}$)** | **0.834 ms** | Max burst response window |
 | **Audit Completeness** | **100%** | Ledger append and hash validation |
 
 ### Category-by-Category Held-Out Breakdown

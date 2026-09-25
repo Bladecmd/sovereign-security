@@ -98,17 +98,33 @@ npm run build
 
 ## 5. Documentation Directory
 
-Detailed architectural and design specifications are located in [`docs/`](./docs/):
-
+- [`docs/USER_MANUAL.md`](./docs/USER_MANUAL.md) — **Official Production User Manual & Operator Runbook** (SOC V2, APIs, Render deployment, emergency procedures).
+- [`docs/EDGE_SECURITY_REQUIREMENTS.md`](./docs/EDGE_SECURITY_REQUIREMENTS.md) — Edge reverse proxy, WAF, and ingress DDoS security architecture.
+- [`docs/PHASE_2D_CLOSURE_AUDIT.md`](./docs/PHASE_2D_CLOSURE_AUDIT.md) — Formal Phase 2D closure audit and adversarial validation analysis.
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — System boundaries, event-driven pipelines, and isolation principles.
 - [`docs/SECURITY_MODEL.md`](./docs/SECURITY_MODEL.md) — Zero-trust identity, least privilege RBAC, and permission models.
 - [`docs/EVENT_SCHEMA.md`](./docs/EVENT_SCHEMA.md) — Specification of `SecurityEvent` and `SecurityAlert` schemas.
 - [`docs/POLICY_ENGINE.md`](./docs/POLICY_ENGINE.md) — Policy evaluation lifecycle, rule priorities, and escalation mechanics.
 - [`docs/AI_SECURITY.md`](./docs/AI_SECURITY.md) — AI pipeline stages, VEGA tool permission policies, and safety constraints.
 - [`docs/INTEGRATION.md`](./docs/INTEGRATION.md) — Sovereign OS and Metro Task Force adapter specifications.
-- [`docs/THREAT_MODEL.md`](./docs/THREAT_MODEL.md) — Defensive threat scenarios, risk factors, and roadmap markers (V0.2 - V1.0).
+- [`docs/THREAT_MODEL.md`](./docs/THREAT_MODEL.md) — Defensive threat scenarios, risk factors, and roadmap markers.
+- [`render.yaml`](./render.yaml) — Production Render Blueprint Specification (Infrastructure-as-Code).
 
 ---
 
-## 6. License & Perimeter
+## 6. Production Deployment (Render)
+
+Sovereign Security includes a production Render Blueprint for automated deployment:
+```bash
+# Push master to your GitHub repository
+git push origin master
+
+# Deploy via Render Dashboard > Blueprints > New Blueprint Instance
+# Connect your repository and apply render.yaml
+```
+Refer to [`docs/USER_MANUAL.md`](./docs/USER_MANUAL.md#4-production-deployment-render-cloud-guide) for step-by-step instructions.
+
+---
+
+## 7. License & Perimeter
 Proprietary — strictly authorized for Sovereign Ecosystem assets and controlled test environments only.
