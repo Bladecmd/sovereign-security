@@ -1,10 +1,10 @@
-﻿# Exclude git repository and sensitive configurations
+# Exclude git repository and sensitive configurations
 .git
 .gitignore
 .env
-.env.*
-secrets/
-private/
+/secrets/
+/private/
+!src/secrets/
 *.pem
 *.key
 *.crt

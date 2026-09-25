@@ -8,9 +8,9 @@
 *.pem
 *.key
 *.crt
-*.pfx
-secrets/
-private/
+/secrets/
+/private/
+!src/secrets/
 
 # Dependencies
 node_modules/
