@@ -61,7 +61,7 @@ export class RiskEngine {
     let score = this.SEVERITY_BASE_SCORES[factors.severity] ?? 30;
 
     // 2. Action sensitivity modifier
-    const actionLower = factors.action.toLowerCase();
+    const actionLower = (factors.action || '').toLowerCase();
     if (
       actionLower.includes('admin') ||
       actionLower.includes('root') ||

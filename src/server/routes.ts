@@ -259,15 +259,16 @@ export class SovereignSecurityApiHandler {
         const input = body as CreateSecurityEventInput;
 
         const eventId =
-          input.eventId || `evt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-        const timestamp = input.timestamp || new Date().toISOString();
-        const riskScore =
-          input.riskScore > 0
-            ? input.riskScore
-            : RiskEngine.calculateRisk({
-                severity: input.severity,
-                action: input.action,
-              });
+          input?.eventId || `evt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        const timestamp = input?.timestamp || new Date().toISOString();
+        let riskScore = input?.riskScore > 0 ? input.riskScore : 0;
+        
+        if (riskScore === 0 && input?.severity && input?.action && typeof input.action === 'string') {
+          riskScore = RiskEngine.calculateRisk({
+            severity: input.severity,
+            action: input.action,
+          });
+        }
 
         const eventPayload: SecurityEvent = {
           ...input,
@@ -468,24 +469,33 @@ export class SovereignSecurityApiHandler {
 
       if (method === 'POST' && url.pathname === '/api/v1/ingest/mtf') {
         const body = await this.readJsonBody(req);
-        const { event, alerts } = this.mtfAdapter.ingest(body as MTFRawSecurityPayload);
+        
+        try {
+          const { event, alerts } = this.mtfAdapter.ingest(body as MTFRawSecurityPayload);
 
-        this.recentEvents.push(event);
-        this.coordinator.getForensics().registerEvents([event]);
-        this.broadcaster.broadcastEvent(event);
-        globalMetrics.incrementCounter('sovereign_security_events_ingested_total');
+          this.recentEvents.push(event);
+          this.coordinator.getForensics().registerEvents([event]);
+          this.broadcaster.broadcastEvent(event);
+          globalMetrics.incrementCounter('sovereign_security_events_ingested_total');
 
-        for (const alert of alerts) {
-          this.alertsStore.set(alert.alertId, alert);
-          this.broadcaster.broadcastAlert(alert);
-          globalMetrics.incrementCounter('sovereign_security_alerts_generated_total');
+          for (const alert of alerts) {
+            this.alertsStore.set(alert.alertId, alert);
+            this.broadcaster.broadcastAlert(alert);
+            globalMetrics.incrementCounter('sovereign_security_alerts_generated_total');
+          }
+
+          return this.sendJson(res, 201, {
+            success: true,
+            normalizedEvent: event,
+            triggeredAlerts: alerts,
+          });
+        } catch (error: any) {
+          // If Zod validation or RiskEngine fails, it's a Bad Request
+          return this.sendJson(res, 400, {
+            error: 'VALIDATION_FAILED',
+            message: error.message || 'Invalid MTF payload',
+          });
         }
-
-        return this.sendJson(res, 201, {
-          success: true,
-          normalizedEvent: event,
-          triggeredAlerts: alerts,
-        });
       }
 
       if (method === 'POST' && url.pathname === '/api/v1/ai/gateway/inspect-input') {
